@@ -74,7 +74,8 @@
     .day time span { text-transform: uppercase; letter-spacing: .09em; font-size: .67rem; font-weight: 700; color: var(--muted); margin-top: 4px; }
     .entries { align-self: center; display: grid; gap: 5px; border-left: 1px solid var(--line); padding: 3px 0 3px 17px; }
     .entry { display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 12px; align-items: start; padding-block: 4px; line-height: 1.42; }
-    .entry > span:last-child { overflow-wrap: anywhere; white-space: pre-line; }
+    .plan-text { display: block; overflow-wrap: anywhere; white-space: pre-line; }
+    .plan-attendees { display: block; margin-top: 3px; color: var(--muted); font-size: .78rem; overflow-wrap: anywhere; }
     .tag { justify-self: start; max-width: 100%; border-radius: 5px; padding: 3px 8px; line-height: 1.35; font-size: .73rem; font-weight: 700; overflow-wrap: anywhere; }
     .tag.celebration { background: #fae3bc; color: #663e10; }
     .tag.travel { background: #e3edf6; color: #254965; }
@@ -94,8 +95,8 @@
     .matrix-heading, .matrix-plan { display: block; border-radius: 7px; background: var(--tone-bg); color: var(--tone-ink); }
     .matrix-heading { padding: 8px 9px; border-bottom: 3px solid var(--tone-accent); overflow-wrap: anywhere; }
     .matrix-plan { min-height: 100%; padding: 9px; font-size: .83rem; line-height: 1.4; border-left: 3px solid var(--tone-accent); }
-    .matrix-plan p { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
-    .matrix-plan p + p { margin-top: 6px; }
+    .matrix-plan .plan + .plan { margin-top: 6px; }
+    .matrix-plan .plan-attendees { color: inherit; }
     .matrix-label { display: none; }
     .matrix-gap { display: block; padding: 9px; color: var(--muted); }
     .matrix [data-tone="0"] { --tone-bg: #fae6be; --tone-ink: #603b14; --tone-accent: #b16c27; }
@@ -283,28 +284,46 @@
         throw new Error("The calendar needs its Date row in row 3");
       }
       const travelers = [];
+      const attendees = followingRows.find(row => row[0]?.trim().toLowerCase() === "celebration attendees");
       for (const row of followingRows) {
         const name = row[0]?.trim();
         if (!name) break;
+        if (row === attendees) continue;
         const entries = row.slice(1);
         travelers.push({ name, entries });
       }
       let year = FIRST_TRIP_YEAR;
       let previousMonth;
-      const days = [];
-      for (let column = 1; column < dates.length; column++) {
-        const date = parseDate(dates[column].trim(), year, previousMonth);
-        if (!date) continue;
-        year = date.getUTCFullYear();
-        previousMonth = date.getUTCMonth() + 1;
+      let currentDay;
+      const daysByDate = new Map();
+      const width = Math.max(dates.length, celebrations.length, ...travelers.map(person => person.entries.length + 1));
+      for (let column = 1; column < width; column++) {
+        const dateText = dates[column]?.trim();
+        if (dateText) {
+          const date = parseDate(dateText, year, previousMonth);
+          currentDay = undefined;
+          if (!date) continue;
+          year = date.getUTCFullYear();
+          previousMonth = date.getUTCMonth() + 1;
+          const key = date.toISOString();
+          if (!daysByDate.has(key)) daysByDate.set(key, { date, entries: [] });
+          currentDay = daysByDate.get(key);
+        }
+        if (!currentDay) continue;
         const entries = readPlans(celebrations[column], "celebration", "Celebration");
+        const guestLists = attendees?.[column]?.split(/\r?\n/) ?? [];
+        entries.forEach((entry, index) => {
+          const guests = entries.length === 1 ? guestLists.map(line => line.trim()).filter(Boolean).join(", ") : guestLists[index]?.trim();
+          if (guests) entry.attendees = guests;
+        });
         for (const person of travelers) {
           entries.push(...readPlans(person.entries[column - 1], "travel", person.name));
         }
-        entries.sort((left, right) => (left.minutes ?? 1440) - (right.minutes ?? 1440));
-        days.push({ date, entries });
+        currentDay.entries.push(...entries);
       }
+      const days = [...daysByDate.values()];
       if (!days.length) throw new Error("No dated columns found");
+      for (const day of days) day.entries.sort((left, right) => (left.minutes ?? 1440) - (right.minutes ?? 1440));
       days.sort((left, right) => left.date - right.date);
       return { days, travelers: [...new Set(travelers.map(person => person.name))] };
     }
@@ -331,6 +350,13 @@
     let view = "all";
     let lastAttempt = 0;
 
+    function renderPlan(entry) {
+      const plan = element("div", "plan");
+      plan.append(element("span", "plan-text", entry.text));
+      if (entry.attendees) plan.append(element("span", "plan-attendees", "Attending: " + entry.attendees));
+      return plan;
+    }
+
     function renderDay(day, entries) {
       const item = element("li", "day");
       const time = element("time");
@@ -343,7 +369,7 @@
       const list = element("ul", "entries");
       for (const entry of entries) {
         const row = element("li", "entry");
-        row.append(element("span", "tag " + entry.type, entry.label), element("span", "", entry.text));
+        row.append(element("span", "tag " + entry.type, entry.label), renderPlan(entry));
         list.append(row);
       }
       if (!entries.length) list.append(element("li", "entry empty", "No plans listed"));
@@ -424,7 +450,7 @@
               plan.setAttribute("data-tone", String(tone));
               const stackedLabel = element("span", "matrix-label", label);
               stackedLabel.setAttribute("aria-hidden", "true");
-              plan.append(stackedLabel, ...plans.map(entry => element("p", "", entry.text)));
+              plan.append(stackedLabel, ...plans.map(renderPlan));
               cell.append(plan);
             } else {
               cell.append(element("span", "matrix-gap", "—"));
