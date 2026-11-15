@@ -395,10 +395,13 @@
         text = entry.text.split("|").map(segment => {
           const endpoints = segment.trim().split(/\s*(?:>>|»|→)\s*/);
           if (endpoints.length !== 2 || endpoints.some(endpoint => !endpoint)) return segment.trim();
-          const route = routes.get(routeKey(...endpoints));
+          const [departure, destination] = endpoints;
+          const prefix = /^((?:\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?|\d{2}:\d{2}|noon|midnight)(?:\s+IST)?)\s+/i.exec(departure);
+          const origin = prefix ? departure.slice(prefix[0].length) : departure;
+          const route = routes.get(routeKey(origin, destination));
           if (!route) return endpoints.join(" » ");
           duration = route.duration;
-          return route.from + " » " + route.to;
+          return (prefix ? prefix[1] + " · " : "") + route.from + " » " + route.to;
         }).join(" · ");
       }
       plan.append(element("span", "plan-text", text));
