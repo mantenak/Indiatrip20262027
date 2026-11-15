@@ -56,10 +56,10 @@
     .refresh { flex-shrink: 0; border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px; color: var(--forest); background: var(--card); }
     .refresh:disabled { opacity: .65; cursor: wait; }
     .tools { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin: 18px 0 24px; }
-    .views { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: #edece1; }
-    .views button { border: 0; border-radius: 7px; color: var(--ink); background: transparent; padding: 8px 14px; font-weight: 700; font-size: .85rem; }
-    .views button:hover { background: #e4e9dc; }
-    .views button[aria-pressed="true"] { color: white; background: var(--forest); }
+    .views { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: min(100%, 350px); }
+    .views button { min-height: 44px; border: 1px solid #b4c9b1; border-radius: 8px; color: var(--forest); background: #e3efe0; padding: 8px 14px; font-weight: 700; font-size: .85rem; }
+    .views button:hover { background: #d6e8d2; }
+    .views button[aria-pressed="true"] { color: white; border-color: var(--forest); background: var(--forest); }
     .check { color: var(--muted); display: flex; gap: 8px; align-items: center; font-size: .87rem; cursor: pointer; }
     input[type="checkbox"] { accent-color: var(--forest); width: 17px; height: 17px; margin: 0; }
     .person { font-size: .9rem; display: flex; align-items: center; gap: 8px; }
@@ -175,8 +175,8 @@
       </div>
       <div class="tools">
         <div class="views" role="group" aria-label="Itinerary view">
-          <button type="button" data-view="all" aria-pressed="true">Day by day</button>
-          <button type="button" data-view="combined" aria-pressed="false">Combined</button>
+          <button type="button" data-view="combined" aria-pressed="true">Combined</button>
+          <button type="button" data-view="all" aria-pressed="false">Day by day</button>
           <button type="button" data-view="celebration" aria-pressed="false">Celebrations</button>
           <button type="button" data-view="travel" aria-pressed="false">Travel</button>
         </div>
@@ -347,7 +347,7 @@
     const showEmpty = document.querySelector("#show-empty");
     const viewButtons = [...document.querySelectorAll("[data-view]")];
     let calendar;
-    let view = "all";
+    let view = "combined";
     let lastAttempt = 0;
 
     function renderPlan(entry) {
