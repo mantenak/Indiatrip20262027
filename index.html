@@ -396,8 +396,11 @@
     }
 
     function compactDuration(duration) {
-      return duration.replace(/\s*(?:hours?|hrs?|h)\b/gi, "h")
-        .replace(/\s*(?:minutes?|mins?|m)\b/gi, "m");
+      const total = maxDriveMinutes(duration);
+      if (total === null) return duration;
+      const hours = Math.floor(total / 60);
+      const minutes = total % 60;
+      return [hours ? hours + "h" : "", minutes || !hours ? minutes + "m" : ""].filter(Boolean).join(" ");
     }
 
     function maxDriveMinutes(duration) {
@@ -480,7 +483,7 @@
         }
       }
       const planText = element("span", "plan-text", text);
-      if (routeDetails) planText.title = routeDetails.from + " to " + routeDetails.to + " · Estimated drive: " + routeDetails.duration;
+      if (routeDetails) planText.title = routeDetails.from + " to " + routeDetails.to + " · Estimated drive: " + compactDuration(routeDetails.duration);
       plan.append(planText);
       if (entry.attendees) plan.append(element("span", "plan-attendees", "Attending: " + entry.attendees));
       return plan;
