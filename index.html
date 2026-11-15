@@ -76,7 +76,6 @@
     .entry { display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 12px; align-items: start; padding-block: 4px; line-height: 1.42; }
     .plan-text { display: block; overflow-wrap: anywhere; white-space: pre-line; }
     .plan-attendees { display: block; margin-top: 3px; color: var(--muted); font-size: .78rem; overflow-wrap: anywhere; }
-    .plan-duration { display: block; margin-top: 3px; font-size: .78rem; font-weight: 700; }
     .route-guide { padding: 0 0 42px; }
     .route-guide h2 { font-size: clamp(2.25rem, 4vw, 3.35rem); }
     .route-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; padding: 0; margin: 17px 0 0; list-style: none; }
@@ -346,13 +345,51 @@
       return new Intl.DateTimeFormat("en-US", { ...options, timeZone: "UTC" }).format(date);
     }
 
+    const LOCATION_CODES = {
+      "hyderabad airport (hyd)": "HYD",
+      mangalagiri: "MAN",
+      bapatla: "BAP",
+      alakapuram: "ALA"
+    };
+    const HYDERABAD_ALIASES = ["hyderabad", "hydrabad", "hyderabad airport"];
+
+    function locationKey(name) {
+      const key = name.trim().toLowerCase().replace(/\s+/g, " ");
+      if (HYDERABAD_ALIASES.includes(key)) return "hyderabad airport (hyd)";
+      return Object.keys(LOCATION_CODES).find(location => LOCATION_CODES[location].toLowerCase() === key) ?? key;
+    }
+
     function routeKey(from, to) {
-      const normalize = name => {
-        const key = name.trim().toLowerCase().replace(/\s+/g, " ");
-        return ["hyderabad", "hydrabad", "hyd", "hyderabad airport", "hyderabad airport (hyd)"].includes(key)
-          ? "hyderabad airport (hyd)" : key;
+      return locationKey(from) + " >> " + locationKey(to);
+    }
+
+    function compactRoute(from, to) {
+      const label = name => LOCATION_CODES[locationKey(name)] ?? name;
+      return label(from) + " >> " + label(to);
+    }
+
+    function compactDuration(duration) {
+      return duration.replace(/\s*(?:hours?|hrs?|h)\b/gi, "h")
+        .replace(/\s*(?:minutes?|mins?|m)\b/gi, "m");
+    }
+
+    function maxDriveMinutes(duration) {
+      const upper = duration.split(/[-–—]/).at(-1).trim();
+      const parts = /^(?:(\d+)\s*(?:hours?|hrs?|h)\b)?\s*(?:(\d+)\s*(?:minutes?|mins?|m)\b)?$/i.exec(upper);
+      return parts && (parts[1] || parts[2]) ? Number(parts[1] ?? 0) * 60 + Number(parts[2] ?? 0) : null;
+    }
+
+    function compactTimeRange(start, duration) {
+      const arrival = start + duration;
+      const daysLater = Math.floor(arrival / 1440);
+      const period = total => total % 1440 < 720 ? "am" : "pm";
+      const clock = total => {
+        const hours = Math.floor(total / 60) % 12 || 12;
+        const minutes = total % 60;
+        return String(hours) + (minutes ? ":" + String(minutes).padStart(2, "0") : "");
       };
-      return normalize(from) + " >> " + normalize(to);
+      const startPeriod = !daysLater && period(start) === period(arrival) ? "" : period(start);
+      return clock(start) + startPeriod + " - " + clock(arrival) + period(arrival) + (daysLater ? " (+" + daysLater + "d)" : "");
     }
 
     function readRoutes(rows) {
@@ -390,22 +427,34 @@
     function renderPlan(entry) {
       const plan = element("div", "plan");
       let text = entry.text;
-      let duration;
+      let routeDetails;
       if (entry.type === "travel") {
-        text = entry.text.split("|").map(segment => {
+        const segments = entry.text.split("|").map(segment => {
           const endpoints = segment.trim().split(/\s*(?:>>|»|→)\s*/);
           if (endpoints.length !== 2 || endpoints.some(endpoint => !endpoint)) return segment.trim();
           const [departure, destination] = endpoints;
           const prefix = /^((?:\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?|\d{2}:\d{2}|noon|midnight)(?:\s+IST)?)\s+/i.exec(departure);
           const origin = prefix ? departure.slice(prefix[0].length) : departure;
           const route = routes.get(routeKey(origin, destination));
-          if (!route) return endpoints.join(" » ");
-          duration = route.duration;
-          return (prefix ? prefix[1] + " · " : "") + route.from + " » " + route.to;
-        }).join(" · ");
+          if (!route) return endpoints.join(" >> ");
+          routeDetails = route;
+          return compactRoute(route.from, route.to);
+        });
+        text = segments.join(" · ");
+        if (routeDetails) {
+          const start = entry.minutes ?? planMinutes(entry.text);
+          const maxDuration = maxDriveMinutes(routeDetails.duration);
+          if (start !== null && maxDuration !== null) {
+            const clockOnly = /^(?:\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?|\d{2}:\d{2}|noon|midnight)(?:\s+IST)?$/i;
+            text = segments.filter(segment => !clockOnly.test(segment)).join(" · ") + " " + compactTimeRange(start, maxDuration);
+          } else {
+            text += " · " + compactDuration(routeDetails.duration);
+          }
+        }
       }
-      plan.append(element("span", "plan-text", text));
-      if (duration) plan.append(element("span", "plan-duration", "Estimated drive: " + duration));
+      const planText = element("span", "plan-text", text);
+      if (routeDetails) planText.title = routeDetails.from + " to " + routeDetails.to + " · Estimated drive: " + routeDetails.duration;
+      plan.append(planText);
       if (entry.attendees) plan.append(element("span", "plan-attendees", "Attending: " + entry.attendees));
       return plan;
     }
@@ -414,7 +463,9 @@
       routeList.replaceChildren();
       for (const { from, to, duration } of routes.values()) {
         const card = element("li", "route-card");
-        card.append(element("strong", "", from + " » " + to), element("span", "", "Estimated drive: " + duration));
+        const label = element("strong", "", compactRoute(from, to));
+        label.title = from + " to " + to;
+        card.append(label, element("span", "", compactDuration(duration)));
         routeList.append(card);
       }
       routeList.hidden = routes.size === 0;
