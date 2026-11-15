@@ -56,6 +56,9 @@
     .refresh { flex-shrink: 0; border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px; color: var(--forest); background: var(--card); }
     .refresh:disabled { opacity: .65; cursor: wait; }
     .tools { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin: 18px 0 24px; }
+    .route-key { display: flex; flex-wrap: wrap; gap: 5px 16px; margin: 12px 0 0; color: var(--muted); font-size: .78rem; }
+    .route-key > span { white-space: nowrap; }
+    .route-key strong { color: var(--forest); }
     .views { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: min(100%, 350px); }
     .views button { min-height: 44px; border: 1px solid #b4c9b1; border-radius: 8px; color: var(--forest); background: #e3efe0; padding: 8px 14px; font-weight: 700; font-size: .85rem; }
     .views button:hover { background: #d6e8d2; }
@@ -180,6 +183,12 @@
           <button id="refresh" class="refresh" type="button" hidden>Refresh</button>
         </div>
       </div>
+      <p class="route-key" aria-label="Route abbreviations">
+        <span><strong>HYD</strong> = Hyderabad</span>
+        <span><strong>MAN</strong> = Mangalagiri</span>
+        <span><strong>BAP</strong> = Bapatla</span>
+        <span><strong>ALA</strong> = Alakapuram</span>
+      </p>
       <div class="tools">
         <div class="views" role="group" aria-label="Itinerary view">
           <button type="button" data-view="combined" aria-pressed="true">Combined</button>
