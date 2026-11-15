@@ -302,6 +302,12 @@
       return Number(hour24) * 60 + Number(minute24);
     }
 
+    const ROUTE_ARROW = /\s*(?:>>|»|→)\s*/;
+    const ROUTE_CLOCK = /(?:\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?|\d{2}:\d{2}|noon|midnight)(?:\s+IST)?/i;
+    const ROUTE_CLOCK_ONLY = new RegExp("^" + ROUTE_CLOCK.source + "$", "i");
+    const ROUTE_CLOCK_PREFIX = new RegExp("^" + ROUTE_CLOCK.source + "\\s+", "i");
+    const ROUTE_CLOCK_SUFFIX = new RegExp("\\s+(?:at\\s+)?" + ROUTE_CLOCK.source + "$", "i");
+
     function readPlans(cell, type, label) {
       const entries = [];
       for (const line of (cell ?? "").split(/\r?\n/)) {
@@ -309,8 +315,11 @@
         if (!text) continue;
         const minutes = planMinutes(text);
         const previous = entries.at(-1);
-        if (previous && minutes === null) {
+        const standaloneDeparture = minutes !== null && type === "travel" && previous?.minutes === null &&
+          ROUTE_ARROW.test(previous.text) && ROUTE_CLOCK_ONLY.test(text);
+        if (previous && (minutes === null || standaloneDeparture)) {
           previous.text += "\n" + text;
+          if (standaloneDeparture) previous.minutes = minutes;
         } else {
           entries.push({ type, label, text, minutes });
         }
@@ -460,12 +469,11 @@
       let routeDetails;
       if (entry.type === "travel") {
         const segments = entry.text.split("|").map(segment => {
-          const endpoints = segment.trim().split(/\s*(?:>>|»|→)\s*/);
+          const endpoints = segment.trim().split(ROUTE_ARROW);
           if (endpoints.length !== 2 || endpoints.some(endpoint => !endpoint)) return segment.trim();
           const [departure, destination] = endpoints;
-          const prefix = /^((?:\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?|\d{2}:\d{2}|noon|midnight)(?:\s+IST)?)\s+/i.exec(departure);
-          const origin = prefix ? departure.slice(prefix[0].length) : departure;
-          const route = routes.get(routeKey(origin, destination));
+          const origin = departure.replace(ROUTE_CLOCK_PREFIX, "");
+          const route = routes.get(routeKey(origin, destination.replace(ROUTE_CLOCK_SUFFIX, "")));
           if (!route) return endpoints.join(" >> ");
           routeDetails = route;
           return compactRoute(route.from, route.to);
@@ -475,8 +483,7 @@
           const start = entry.minutes ?? planMinutes(entry.text);
           const maxDuration = maxDriveMinutes(routeDetails.duration);
           if (start !== null && maxDuration !== null) {
-            const clockOnly = /^(?:\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?|\d{2}:\d{2}|noon|midnight)(?:\s+IST)?$/i;
-            text = segments.filter(segment => !clockOnly.test(segment)).join(" · ") + " " + compactTimeRange(start, maxDuration);
+            text = segments.filter(segment => !ROUTE_CLOCK_ONLY.test(segment)).join(" · ") + " " + compactTimeRange(start, maxDuration);
           } else {
             text += " · " + compactDuration(routeDetails.duration);
           }
