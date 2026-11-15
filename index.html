@@ -117,6 +117,14 @@
     .matrix [data-tone="5"] { --tone-bg: #f6e4d7; --tone-ink: #643824; --tone-accent: #ac6846; }
     footer { padding: 21px 0 30px; border-top: 1px solid var(--line); color: var(--muted); font-size: .77rem; }
     footer a { color: inherit; text-underline-offset: 3px; }
+    @media (min-width: 821px) {
+      #itinerary:has(> .matrix) { overflow-x: auto; }
+      .matrix { table-layout: auto; }
+      .matrix thead th:first-child { min-width: 102px; }
+      .matrix thead .matrix-time-heading { min-width: 104px; }
+      .matrix thead .matrix-celebrations { width: 235px; min-width: 235px; }
+      .matrix thead th:nth-child(n + 4) { min-width: 92px; }
+    }
     @media (max-width: 820px) {
       .matrix, .matrix caption, .matrix tbody { display: block; }
       .matrix thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -128,6 +136,7 @@
       .matrix td { display: block; padding: 0; }
       .matrix td.is-empty { display: none; }
       .matrix .matrix-slot { grid-column: 1 / -1; padding: 0 3px; }
+      .matrix td.matrix-celebrations { grid-column: 1 / -1; }
       .matrix-label { display: block; margin-bottom: 3px; font-size: .73rem; font-weight: 700; }
     }
     @media (max-width: 680px) {
@@ -526,7 +535,7 @@
       timeHeading.scope = "col";
       headings.append(dateHeading, timeHeading);
       for (const { label, tone } of columns) {
-        const heading = element("th");
+        const heading = element("th", tone === 0 ? "matrix-celebrations" : "");
         heading.scope = "col";
         const badge = element("span", "matrix-heading", label);
         badge.setAttribute("data-tone", String(tone));
@@ -569,6 +578,7 @@
           for (const { label, tone } of columns) {
             const plans = entries.filter(entry => tone === 0 ? entry.type === "celebration" : entry.type === "travel" && entry.label === label);
             const cell = element("td", plans.length ? "" : "is-empty");
+            if (tone === 0) cell.className = plans.length ? "matrix-celebrations" : "matrix-celebrations is-empty";
             cell.setAttribute("role", "cell");
             if (plans.length) {
               const plan = element("div", "matrix-plan");
