@@ -76,6 +76,14 @@
     .entry { display: grid; grid-template-columns: 108px minmax(0, 1fr); gap: 12px; align-items: start; padding-block: 4px; line-height: 1.42; }
     .plan-text { display: block; overflow-wrap: anywhere; white-space: pre-line; }
     .plan-attendees { display: block; margin-top: 3px; color: var(--muted); font-size: .78rem; overflow-wrap: anywhere; }
+    .plan-duration { display: block; margin-top: 3px; font-size: .78rem; font-weight: 700; }
+    .route-guide { padding: 0 0 42px; }
+    .route-guide h2 { font-size: clamp(2.25rem, 4vw, 3.35rem); }
+    .route-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; padding: 0; margin: 17px 0 0; list-style: none; }
+    .route-card { background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 13px 15px; }
+    .route-card strong, .route-card span { display: block; }
+    .route-card span, .route-status { color: var(--muted); font-size: .85rem; }
+    .route-status { margin: 9px 0 0; }
     .tag { justify-self: start; max-width: 100%; border-radius: 5px; padding: 3px 8px; line-height: 1.35; font-size: .73rem; font-weight: 700; overflow-wrap: anywhere; }
     .tag.celebration { background: #fae3bc; color: #663e10; }
     .tag.travel { background: #e3edf6; color: #254965; }
@@ -186,6 +194,11 @@
       <noscript>The itinerary needs JavaScript to display.</noscript>
       <div id="itinerary"></div>
     </section>
+    <section class="route-guide" aria-labelledby="route-title">
+      <h2 id="route-title">Route guide</h2>
+      <p id="route-status" class="route-status">Loading drive estimates…</p>
+      <ul class="route-list" id="route-list" hidden></ul>
+    </section>
   </main>
   <footer class="shell">
     Photo by Kavali Chandrakanth KCK. <a href="https://commons.wikimedia.org/wiki/File:Charminar_at_Hyderabad_Telangana_India.jpg">Wikimedia Commons</a> · <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>. Display cropped.
@@ -196,6 +209,7 @@
     // The published CSV for Sheet1. Google Sheets republishes it after edits.
     const PUBLISHED_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR_6ZXlSI_TgVWJ4wNgUjVeoqq0SFNtmyD9HkYUChgxTGvZujkXcUZEdvzjH-LwC9jJdSWvFAOh5tL8/pub?gid=0&single=true&output=csv";
     const FIRST_TRIP_YEAR = 2026;
+    const ROUTES_TAB_ID = "202627003";
     const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
     const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
@@ -332,6 +346,26 @@
       return new Intl.DateTimeFormat("en-US", { ...options, timeZone: "UTC" }).format(date);
     }
 
+    function routeKey(from, to) {
+      const normalize = name => {
+        const key = name.trim().toLowerCase().replace(/\s+/g, " ");
+        return ["hyderabad", "hydrabad", "hyd", "hyderabad airport", "hyderabad airport (hyd)"].includes(key)
+          ? "hyderabad airport (hyd)" : key;
+      };
+      return normalize(from) + " >> " + normalize(to);
+    }
+
+    function readRoutes(rows) {
+      const [header, ...entries] = rows;
+      if (header?.slice(0, 3).join("|") !== "From|To|Estimated drive time") throw new Error("Expected the Routes tab");
+      const routes = new Map();
+      for (const row of entries) {
+        const [from, to, duration] = row.map(value => value.trim());
+        if (from && to && duration) routes.set(routeKey(from, to), { from, to, duration });
+      }
+      return routes;
+    }
+
     function element(tag, className, content) {
       const child = document.createElement(tag);
       if (className) child.className = className;
@@ -345,16 +379,44 @@
     const refresh = document.querySelector("#refresh");
     const traveler = document.querySelector("#traveler");
     const showEmpty = document.querySelector("#show-empty");
+    const routeList = document.querySelector("#route-list");
+    const routeStatus = document.querySelector("#route-status");
     const viewButtons = [...document.querySelectorAll("[data-view]")];
     let calendar;
+    let routes = new Map();
     let view = "combined";
     let lastAttempt = 0;
 
     function renderPlan(entry) {
       const plan = element("div", "plan");
-      plan.append(element("span", "plan-text", entry.text));
+      let text = entry.text;
+      let duration;
+      if (entry.type === "travel") {
+        text = entry.text.split("|").map(segment => {
+          const endpoints = segment.trim().split(/\s*(?:>>|»|→)\s*/);
+          if (endpoints.length !== 2 || endpoints.some(endpoint => !endpoint)) return segment.trim();
+          const route = routes.get(routeKey(...endpoints));
+          if (!route) return endpoints.join(" » ");
+          duration = route.duration;
+          return route.from + " » " + route.to;
+        }).join(" · ");
+      }
+      plan.append(element("span", "plan-text", text));
+      if (duration) plan.append(element("span", "plan-duration", "Estimated drive: " + duration));
       if (entry.attendees) plan.append(element("span", "plan-attendees", "Attending: " + entry.attendees));
       return plan;
+    }
+
+    function renderRoutes() {
+      routeList.replaceChildren();
+      for (const { from, to, duration } of routes.values()) {
+        const card = element("li", "route-card");
+        card.append(element("strong", "", from + " » " + to), element("span", "", "Estimated drive: " + duration));
+        routeList.append(card);
+      }
+      routeList.hidden = routes.size === 0;
+      routeStatus.hidden = routes.size > 0;
+      routeStatus.textContent = "No drive estimates to display.";
     }
 
     function renderDay(day, entries) {
@@ -506,24 +568,43 @@
       render();
     }
 
+    async function fetchSheet(tabId) {
+      const url = new URL(PUBLISHED_CSV_URL);
+      const allowed = url.origin === "https://docs.google.com" && url.pathname.startsWith("/spreadsheets/");
+      if (!allowed || url.searchParams.get("output") !== "csv") throw new Error("Expected a published Google Sheets CSV link");
+      if (tabId) url.searchParams.set("gid", tabId);
+      const response = await fetch(url, {
+        cache: "no-store",
+        credentials: "omit",
+        signal: AbortSignal.timeout(12000)
+      });
+      if (!response.ok) throw new Error("Google Sheets feed is unavailable");
+      const contents = await response.text();
+      if (/^\s*</.test(contents)) throw new Error("Google Sheets returned a webpage");
+      return parseCSV(contents);
+    }
+
     async function refreshCalendar() {
       if (!PUBLISHED_CSV_URL || refresh.disabled) return;
       refresh.disabled = true;
       lastAttempt = Date.now();
       status.textContent = "Checking Google Sheets…";
       try {
-        const url = new URL(PUBLISHED_CSV_URL);
-        const allowed = url.origin === "https://docs.google.com" && url.pathname.startsWith("/spreadsheets/");
-        if (!allowed || url.searchParams.get("output") !== "csv") throw new Error("Expected a published Google Sheets CSV link");
-        const response = await fetch(url, {
-          cache: "no-store",
-          credentials: "omit",
-          signal: AbortSignal.timeout(12000)
-        });
-        if (!response.ok) throw new Error("Calendar feed is unavailable");
-        const contents = await response.text();
-        if (/^\s*</.test(contents)) throw new Error("Calendar feed returned a webpage");
-        setCalendar(readCalendar(parseCSV(contents)));
+        const [schedule, routeFeed] = await Promise.allSettled([
+          fetchSheet().then(readCalendar),
+          fetchSheet(ROUTES_TAB_ID).then(readRoutes)
+        ]);
+        if (routeFeed.status === "fulfilled") {
+          routes = routeFeed.value;
+          renderRoutes();
+        } else if (!routes.size) {
+          routeStatus.textContent = "Drive estimates are temporarily unavailable.";
+        }
+        if (schedule.status === "rejected") {
+          render();
+          throw schedule.reason;
+        }
+        setCalendar(schedule.value);
         status.textContent = "Checked Google Sheets at " + new Intl.DateTimeFormat(undefined, {
           hour: "numeric", minute: "2-digit"
         }).format(new Date());
@@ -556,6 +637,8 @@
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden && Date.now() - lastAttempt >= REFRESH_INTERVAL_MS) refreshCalendar();
       });
+    } else {
+      renderRoutes();
     }
   </script>
 </body>
