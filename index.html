@@ -92,6 +92,8 @@
     .entry.empty { display: block; color: var(--muted); font-size: .88rem; }
     .no-results { margin: 0; padding: 22px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); }
     .matrix { width: 100%; border-collapse: separate; border-spacing: 0 7px; table-layout: fixed; }
+    .matrix tbody { --date-band: #f6f9f1; --date-label: #e9f0e3; }
+    .matrix tbody:nth-of-type(even) { --date-band: #fffaf0; --date-label: #f4eddd; }
     .matrix caption { text-align: left; padding-bottom: 7px; color: var(--muted); font-size: .86rem; }
     .matrix th, .matrix td { text-align: left; vertical-align: top; }
     .matrix thead th { padding: 0 3px 3px; font-size: .8rem; }
@@ -108,7 +110,7 @@
     .matrix-plan .plan + .plan { margin-top: 6px; }
     .matrix-plan .plan-attendees { color: inherit; }
     .matrix-label { display: none; }
-    .matrix-gap { display: block; padding: 9px; color: var(--muted); }
+    .matrix-gap { display: block; padding: 9px; color: #6b7a70; }
     .matrix [data-tone="0"] { --tone-bg: #fae6be; --tone-ink: #603b14; --tone-accent: #b16c27; }
     .matrix [data-tone="1"] { --tone-bg: #deefe4; --tone-ink: #174a35; --tone-accent: #448263; }
     .matrix [data-tone="2"] { --tone-bg: #dfeafb; --tone-ink: #233e6b; --tone-accent: #537ab2; }
@@ -119,16 +121,23 @@
     footer a { color: inherit; text-underline-offset: 3px; }
     @media (min-width: 821px) {
       #itinerary:has(> .matrix) { overflow-x: auto; }
-      .matrix { table-layout: auto; }
+      .matrix { table-layout: auto; border-spacing: 0; }
       .matrix thead th:first-child { min-width: 102px; }
       .matrix thead .matrix-time-heading { min-width: 104px; }
       .matrix thead .matrix-celebrations { width: 235px; min-width: 235px; }
       .matrix thead th:nth-child(n + 4) { min-width: 92px; }
+      .matrix tbody td { background: var(--date-band); }
+      .matrix tbody td:not(.matrix-slot) { padding-block: 4px; }
+      .matrix tbody tr:first-child > * { border-top: 6px solid var(--paper); }
+      .matrix tbody tr:last-child > td, .matrix tbody th { border-bottom: 1px solid var(--line); }
+      .matrix tbody tr:first-child > td:last-child { border-top-right-radius: 9px; }
+      .matrix tbody tr:last-child > td:last-child { border-bottom-right-radius: 9px; }
+      .matrix tbody th { position: sticky; left: 0; z-index: 1; background: var(--date-label); border-radius: 9px 0 0 9px; }
     }
     @media (max-width: 820px) {
       .matrix, .matrix caption, .matrix tbody { display: block; }
       .matrix thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-      .matrix tbody { padding: 10px; margin-top: 9px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+      .matrix tbody { padding: 10px; margin-top: 9px; background: var(--date-band); border: 1px solid var(--line); border-radius: 10px; }
       .matrix tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
       .matrix tbody tr + tr { margin-top: 10px; }
       .matrix tbody th { grid-column: 1 / -1; padding: 2px 3px 6px; background: transparent; }
