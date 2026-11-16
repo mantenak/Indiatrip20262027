@@ -183,8 +183,12 @@
     const grid=document.createElement("div");grid.className="tripcards";
     for(const t of mine){
       const c=document.createElement("div");c.className="tripcard";
-      c.innerHTML='<h4>'+clean(t.name)+'</h4><p>'+clean(t.startLocation)+' · '+t.length+' days · '+t.parks.length+' parks</p><span class="badge '+(t.privacy==="public"?"link":"")+'">'+(t.privacy==="private"?"Private":t.privacy==="unlisted"?"Link sharing":"Public")+'</span><div class="tripactions"><button class="btn primary" data-open>Open</button><button class="btn danger" data-delete>Delete</button></div>';
-      c.querySelector("[data-open]").onclick=()=>window.openTrip(t.id);
+      c.innerHTML='<h4>'+clean(t.name)+'</h4><p>'+clean(t.startLocation)+' · '+t.length+' days · '+t.parks.length+' parks</p><span class="badge '+(t.privacy==="public"?"link":"")+'">'+(t.privacy==="private"?"Private":t.privacy==="unlisted"?"Link sharing":"Public")+'</span><div class="tripactions"><button class="btn primary" data-open>'+(t.days.length?"Open plan":"Open trip")+'</button><button class="btn danger" data-delete>Delete</button></div>';
+      c.querySelector("[data-open]").onclick=()=>{
+        window.openTrip(t.id);
+        const plan = $("#detailsSection");
+        if(t.days.length && plan?.getClientRects().length) plan.scrollIntoView({block:"start"});
+      };
       c.querySelector("[data-delete]").onclick=()=>window.deleteTrip(t.id);
       grid.append(c);
     }
