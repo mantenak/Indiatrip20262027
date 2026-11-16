@@ -138,44 +138,15 @@ create policy "npt anyone reads catalog"
 on public.npt_parks for select to anon, authenticated
 using (true);
 
--- Guests can read an unlisted trip ONLY by presenting a valid token.
--- A previously issued link immediately stops working when the trip is Private.
--- No account fields, email, or share tokens are returned.
-create or replace function public.npt_get_unlisted_trip(p_token uuid)
-returns jsonb
-language sql stable security definer
-set search_path = ''
-as $$
-  select jsonb_build_object(
-    'id', t.id,
-    'name', t.name,
-    'start_date', t.start_date,
-    'length_days', t.length_days,
-    'start_location', t.start_location,
-    'end_location', t.end_location,
-    'vehicle', t.vehicle,
-    'preferences', t.preferences,
-    'parks', t.parks,
-    'itinerary', t.itinerary,
-    'route_segments', t.route_segments,
-    'campgrounds', t.campgrounds,
-    'allow_copy', t.allow_copy
-  )
-  from public.npt_trip_links l
-  join public.npt_trips t on t.id = l.trip_id
-  where l.token = p_token
-    and l.revoked_at is null
-    and (l.expires_at is null or l.expires_at > now())
-    and t.visibility = 'unlisted'
-  limit 1;
-$$;
-
-revoke all on function public.npt_get_unlisted_trip(uuid) from public;
-grant execute on function public.npt_get_unlisted_trip(uuid) to anon, authenticated;
-
--- Checklist before deployment:
--- 1. Run RLS tests as anon, a trip owner, and an unrelated authenticated user.
--- 2. Confirm anon cannot select Private or Unlisted trip rows directly.
--- 3. Confirm a share link fails immediately after the trip is made Private.
--- 4. Never include service_role/secret credentials in GitHub Pages or browser JS.
--- 5. Configure Supabase Auth's exact Site URL / redirects for your NPT URL.
+-- The guest unlisted-trip read endpoint is intentionally not deployed yet.
+-- Before enabling it, use a carefully reviewed Edge Function that:
+-- 1. Checks the opaque share token server-side.
+-- 2. Returns only explicitly shareable fields for unlisted trips.
+-- 3. Immediately stops returning data when visibility becomes private.
+-- 4. Avoids exposing service credentials or a public SECURITY DEFINER function.
+--
+-- TODO before production:
+-- 1. RLS tests as anon, owner, and unrelated authenticated user.
+-- 2. Test public -> private transition; verify direct requests are blocked.
+-- 3. Set exact Supabase Auth Site URL and allowed redirects for the NPT site.
+-- 4. Never commit service_role/secret credentials to GitHub.
