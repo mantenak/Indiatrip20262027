@@ -26,6 +26,7 @@
       privacy:r.visibility || "private", allowCopy:r.allow_copy !== false,
       restorationStatus: r.source_label === "Swift NPT restored draft",
       importedFromSwift:r.source_label === "Swift NPT restored draft",
+      updatedAt:r.updated_at,
       __remote:true
     };
   }
@@ -262,6 +263,69 @@
     $("#shareBtn").disabled=t.privacy==="private";
     $("#shareBtn").onclick=()=>shareTrip(t);
     $("#copyLinkBtn").onclick=()=>navigator.clipboard.writeText($("#shareUrl").value).then(()=>message("Link copied to clipboard")).catch(()=>prompt("Copy this link:",$("#shareUrl").value));
+  };
+  window.renderPlanEditor = function(box, trip, index) {
+    if(!user || !trip.__remote || !mine.some(item=>item.id===trip.id) || !trip.updatedAt) return;
+    const day = trip.days[index];
+    const editor = document.createElement("details");
+    editor.className = "dayitem";
+    editor.innerHTML = `<summary>Edit day</summary>
+      <form class="npt-day-edit">
+        <div class="grid2">
+          <label class="field">Park or route stop<input name="park" required></label>
+          <label class="field">Location<input name="location"></label>
+          <label class="field">Campground<input name="campground"></label>
+          <label class="field">Hookups<input name="hookups"></label>
+          <label class="field">Drive from<input name="driveFrom"></label>
+          <label class="field">Drive to<input name="driveTo"></label>
+          <label class="field">Drive miles<input name="driveMiles" type="number" min="0" step="any"></label>
+          <label class="field">Activities, one per line<textarea name="activities" rows="3"></textarea></label>
+        </div>
+        <label class="field">Notes<textarea name="notes" rows="3"></textarea></label>
+        <button class="btn primary" type="submit">Save day</button>
+        <p role="status"></p>
+      </form>`;
+    const form=editor.querySelector("form");
+    const fields=["park","location","campground","hookups","driveFrom","driveTo","driveMiles","activities","notes"];
+    for(const key of fields) form.elements.namedItem(key).value=key==="activities"?(day.activities||[]).join("\n"):day[key]??"";
+    form.onsubmit=async event=>{
+      event.preventDefault();
+      if(!user) return showAuth();
+      const submit=form.querySelector("button");
+      const status=form.querySelector("[role=status]");
+      submit.disabled=true;
+      status.textContent="Saving...";
+      try {
+        const changed={...day};
+        for(const key of fields){
+          const value=form.elements.namedItem(key).value.trim();
+          changed[key]=key==="activities"?value.split(/\r?\n/).map(line=>line.trim()).filter(Boolean):key==="driveMiles"?(value===""?null:Number(value)):value;
+        }
+        if(!changed.park) throw Error("Enter a park or route stop.");
+        const itinerary=trip.days.map((entry,position)=>position===index?changed:entry);
+        const {data,error}=await db.from("npt_trips")
+          .update({itinerary,updated_at:new Date().toISOString()})
+          .eq("id",trip.id).eq("owner_id",user.id).eq("updated_at",trip.updatedAt)
+          .select("updated_at").maybeSingle();
+        if(error) throw error;
+        if(!data) throw Error("The trip changed since you opened it. Reopen it from My Trips before trying again.");
+        trip.days=itinerary;
+        trip.updatedAt=data.updated_at;
+        await refreshMine();
+        if(lastViewed===trip && box.contains(editor)){
+          renderDetails();
+          const saved=document.createElement("p");
+          saved.setAttribute("role","status");
+          saved.textContent="Day saved to your account.";
+          box.append(saved);
+        }
+      } catch(error){
+        status.textContent=error.message;
+      } finally {
+        submit.disabled=false;
+      }
+    };
+    box.append(editor);
   };
   async function setPrivacy(t) {
     if(!user)return showAuth();
