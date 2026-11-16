@@ -288,7 +288,11 @@ async function importNPTFile(file){
 $("#importTripBtn").addEventListener("click",()=>$("#nptImportFile").click());
 $("#nptImportFile").addEventListener("change",e=>{importNPTFile(e.target.files[0]);e.target.value=""});
 
-buildParks();buildVehicles();renderTrips();if(!checkShared() && !location.hash.startsWith('#public=') && !location.hash.startsWith('#unlisted='))showHome();
+buildParks();buildVehicles();renderTrips();
+// Keep Supabase's callback parameters until its deferred client handles them.
+const isAuthCallback = /[?&](code|error|error_code)=/.test(location.search)
+  || /[#&](access_token|error|error_code)=/.test(location.hash);
+if (!isAuthCallback && !checkShared() && !location.hash.startsWith("#public=") && !location.hash.startsWith("#unlisted=")) showHome();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.76.1" defer></script>
 <script src="./cloud.js" defer></script>
