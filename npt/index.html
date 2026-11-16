@@ -22,7 +22,10 @@
 /* Restored itinerary viewer */
 .importnote{margin-top:13px;padding:11px 12px;border-radius:11px;background:#fff4de;color:#6c4f20;border:1px solid #ebd9ac;font-size:12px}
 .detailnav{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
-.detailnav button.active{background:var(--forest);color:#fff}
+.detailnav button.active,.daypicker button[aria-pressed="true"]{background:var(--forest);color:#fff}
+.daypicker{display:flex;gap:8px;overflow-x:auto;position:relative;padding:4px 3px 10px;margin-bottom:8px}
+.daypicker button{flex:none;border-radius:999px}
+#detailsSection{scroll-margin-top:85px}
 .dayitem{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:14px;margin-bottom:9px}
 .dayitem h4{margin:0 0 4px;font-size:15px}
 .dayitem p{margin:3px 0;font-size:12px;color:var(--muted)}
@@ -38,7 +41,7 @@
 </head>
 <body>
 <div class="app">
-<header class="top"><div class="topin"><div class="logo">NP</div><div class="brand"><h1>National Park Trip</h1><p>Plan national & state park adventures</p></div><div class="topactions"><button class="topbtn" id="importBtn">Open shared trip</button><button class="topbtn primary" onclick="startWizard()">+ Create trip</button></div></div></header>
+<header class="top"><div class="topin"><div class="logo">NP</div><div class="brand"><h1>National Park Trip</h1><p>Plan national & state park adventures</p></div><div class="topactions"><button class="topbtn" id="importBtn">Open shared link</button><button class="topbtn primary" onclick="startWizard()">+ Create trip</button></div></div></header>
 <div class="wrap">
 <section id="home">
 <div class="welcome">
@@ -59,7 +62,7 @@
 <dt>Driving</dt><dd id="vDriving"></dd>
 </dl></div>
 <div class="section"><div class="sectionhead"><div><h3>Parks</h3><p>Selected for this trip</p></div></div><div class="parkchips" id="vParks"></div></div>
-<div class="section" id="detailsSection" style="display:none"><div class="sectionhead"><div><h3>Full Itinerary</h3><p id="detailsSubtitle">Original planning records</p></div></div><div class="detailnav" id="detailsButtons"></div><div id="detailsList"></div><div class="morebar"><button class="btn" id="loadMoreDetails" style="display:none">Show more</button></div></div>
+<div class="section" id="detailsSection" style="display:none"><div class="sectionhead"><div><h3>Trip Plan</h3><p id="detailsSubtitle">Original planning records</p></div></div><div class="detailnav" id="detailsButtons"></div><div id="detailsList"></div><div class="morebar"><button class="btn" id="loadMoreDetails" style="display:none">Show more</button></div></div>
 <div class="section" id="ownerShare"><div class="sectionhead"><div><h3>Privacy & Sharing</h3><p>Control how this trip is shared</p></div></div><div class="summarybox">
 <div><strong id="shareStatus"></strong><p id="shareExplain"></p></div>
 <button class="btn primary" id="shareBtn">Create / Copy Share Link</button>
@@ -222,14 +225,14 @@ function checkShared(){if(location.hash.startsWith("#share=")){const t=decodeTri
 function loadDemo(){const demo={id:"demo",name:"2028 National Park Tour",startDate:"2028-06-01",length:90,startLocation:"Chicago, IL",endLocation:"Chicago, IL",travelers:2,parks:["Badlands National Park","Wind Cave National Park","Grand Teton National Park","Yellowstone National Park","Glacier National Park","Banff National Park","Olympic National Park","Mount Rainier National Park","Crater Lake National Park","Redwood National and State Parks","Yosemite National Park","Death Valley National Park","Joshua Tree National Park","Sequoia National Park","Grand Canyon National Park","Mesa Verde National Park","Great Sand Dunes National Park","Rocky Mountain National Park"],vehicle:{type:"fifthWheel",rvLength:"29.9",rigLength:"",rigHeight:"",model:"Brinkley Z 2700 class"},preferences:{campground:"National Park campground first",maxDriveHours:7,fhuCadence:3,pace:"Balanced",pet:true,avoidMountain:false,avoidUnpaved:true},privacy:"private"};showTrip(demo,false)}
 $("#importBtn").onclick=()=>{const url=prompt("Paste an NPT share link:");if(!url)return;try{const h=new URL(url).hash;if(h.startsWith("#share=")){location.hash=h;checkShared()}else alert("That does not look like an NPT share link.")}catch{alert("Please paste a valid NPT share link.")}}
 
-let viewedItineraryTrip=null, detailMode="stops", detailCount=20;
+let viewedItineraryTrip=null, detailMode="days", detailCount=20, selectedDayIndex=0;
 function renderItinerary(t){
  viewedItineraryTrip=t;
  const hasData=Array.isArray(t.days)&&t.days.length>0;
  $("#detailsSection").style.display=hasData?"block":"none";
  if(!hasData)return;
  $("#detailsSubtitle").textContent=t.days.length+" day entries • "+(t.segments?.length||0)+" route segments • "+(t.campgrounds?.length||0)+" campgrounds • original Swift planning draft";
- detailMode="stops";detailCount=20;
+ detailMode="days";detailCount=20;selectedDayIndex=0;
  renderDetails();
  if(t.restorationStatus){
    $("#shareBtn").disabled=true;
@@ -242,16 +245,39 @@ function renderItinerary(t){
 }
 function renderDetails(){
  const t=viewedItineraryTrip;if(!t)return;
- const tabs=[["stops","Route stops"],["days","Day by day"],["campgrounds","Campgrounds"],["reservations","Reservations"]];
+ const tabs=[["stops","Route stops"],["days","Plan"],["campgrounds","Campgrounds"],["reservations","Reservations"]];
  $("#detailsButtons").innerHTML=tabs.map(([key,label])=>'<button class="btn'+(detailMode===key?" active":"")+'" data-detailmode="'+key+'">'+label+'</button>').join("");
- $("[data-detailmode]").forEach(btn=>btn.onclick=()=>{detailMode=btn.dataset.detailmode;detailCount=20;renderDetails()});
+ $$("[data-detailmode]").forEach(btn=>{btn.setAttribute("aria-pressed",String(btn.dataset.detailmode===detailMode));btn.onclick=()=>{detailMode=btn.dataset.detailmode;detailCount=20;renderDetails();$(`[data-detailmode="${detailMode}"]`).focus();};});
  const box=$("#detailsList");const more=$("#loadMoreDetails");box.innerHTML="";more.style.display="none";
  if(detailMode==="reservations"){
    box.innerHTML='<div class="importnote">The restored file contains campground research and planning notes, not confirmed reservations. Availability, booking windows, and campground security-incident records still need verification.</div>';
    return;
  }
  const entries=detailMode==="stops"?(t.segments||[]):detailMode==="days"?(t.days||[]):(t.campgrounds||[]);
- const shown=entries.slice(0,detailCount);const cards=document.createElement("div");
+ if(detailMode==="days"){
+  const picker=document.createElement("div");
+  picker.className="daypicker";
+  picker.setAttribute("role","group");
+  picker.setAttribute("aria-label","Choose a planning day");
+  entries.forEach((day,index)=>{
+   const button=document.createElement("button");
+   button.type="button";
+   button.className="btn";
+   button.textContent="Day "+(day.dayNumber||index+1);
+   button.setAttribute("aria-pressed",String(index===selectedDayIndex));
+   button.onclick=()=>{
+    selectedDayIndex=index;
+    renderDetails();
+    $("#detailsList .daypicker").children[index].focus({preventScroll:true});
+   };
+   picker.append(button);
+  });
+  box.append(picker);
+  const active=picker.children[selectedDayIndex];
+  picker.scrollLeft=Math.max(0,active.offsetLeft-(picker.clientWidth-active.offsetWidth)/2);
+ }
+ const shown=detailMode==="days"?entries.slice(selectedDayIndex,selectedDayIndex+1):entries.slice(0,detailCount);
+ const cards=document.createElement("div");
  for(let i=0;i<shown.length;i++){
    const e=shown[i];const article=document.createElement("article");article.className="dayitem";
    if(detailMode==="stops"){
@@ -266,7 +292,7 @@ function renderDetails(){
    cards.append(article);
  }
  box.append(cards);
- if(entries.length>detailCount){
+ if(detailMode!=="days"&&entries.length>detailCount){
   more.style.display="inline-block";more.textContent="Show more ("+(entries.length-detailCount)+" remaining)";
   more.onclick=()=>{detailCount+=25;renderDetails()};
  }
