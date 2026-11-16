@@ -78,8 +78,7 @@
     const toolbar = $(".topactions");
     toolbar.insertAdjacentHTML("afterbegin", '<button class="topbtn" id="nptAccountBtn">Sign in</button>');
     const home = $("#home");
-    const welcome = $(".welcome");
-    welcome.insertAdjacentHTML("afterend", `<div class="accountbar"><span id="cloudStatus">Loading NPT...</span><button class="btn" id="nptSignOut" hidden>Sign out</button></div>
+    home.insertAdjacentHTML("beforeend", `<div class="accountbar"><span id="cloudStatus">Loading NPT...</span><button class="btn" id="nptSignOut" hidden>Sign out</button></div>
     <div class="section" id="publicSection"><div class="sectionhead"><div><h3>Explore Public Trips</h3><p>Anyone can view these trips without signing in</p></div><button class="btn" id="refreshPublicTrips">Refresh</button></div><div id="nptPublicList" class="publiclist"><div class="empty">Checking for public trips...</div></div></div>`);
     $("#nptAccountBtn").onclick = () => user ? accountMenu() : showAuth();
     $("#nptCancelAuth").onclick = hideAuth;
@@ -107,10 +106,6 @@
       <label class="privacyopt"><input name="privacy" type="radio" value="public"><div><strong>Public — listed in Explore Trips</strong><small>Anyone can browse this itinerary without an account.</small></div></label>
       <label class="privacyopt"><input name="privacy" type="radio" value="invited" disabled><div><strong>Specific invited people (coming later)</strong><small>View/edit invitations will be added after the core account system is tested.</small></div></label>`;
     $("#inviteWarning").textContent = "Before making a trip public or shareable, remove personal addresses, reservation numbers, and anything you don't want others to see. Private is the default.";
-    $(".sidecard p").textContent="Browse public adventures without signing in. Create an account only when you want to save your own trips.";
-    const chips=$$(".mini span"); if(chips[0])chips[0].textContent="Protected cloud trips"; if(chips[1])chips[1].textContent="Public or unlisted links";
-    const intro=$("#home .sectionhead p");if(intro)intro.textContent="Cloud trips accessible from your signed-in devices";
-    const note=$(".importnote");if(note) note.innerHTML='<strong>Restoring your existing tour?</strong> Sign in, download your private NPT import JSON from our conversation, then select <strong>Import Existing NPT Trip</strong>. Your imported trip will be private in your account. The JSON is never committed to GitHub.';
   }
   function showAuth(intent) {
     const modal=$("#nptAuth"); if(!modal) return alert("Sign-in has not loaded. Refresh the page.");
