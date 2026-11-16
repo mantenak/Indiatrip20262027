@@ -18,6 +18,22 @@
 .viewer{display:none}.viewer.open{display:block}.viewerbar{display:flex;justify-content:space-between;gap:10px;align-items:center;background:#e8f0eb;border:1px solid #c8d7ce;padding:10px 12px;border-radius:11px;margin-bottom:14px}.viewer h2{margin:5px 0 4px}.viewer p{color:var(--muted)}.parkchips{display:flex;flex-wrap:wrap;gap:7px}.chip{background:white;border:1px solid var(--line);border-radius:999px;padding:6px 9px;font-size:12px}
 .sharebox{display:none;margin-top:12px;background:#eef3f7;border:1px solid #cbd8e2;padding:12px;border-radius:11px}.sharebox.show{display:block}.shareline{display:flex;gap:8px}.shareline input{flex:1;border:1px solid #bfcbd5;border-radius:8px;padding:9px}
 @media(max-width:800px){.wrap{padding:16px 14px 50px}.welcome{grid-template-columns:1fr}.hero h2{font-size:31px}.tripcards{grid-template-columns:1fr}.grid2,.choicegrid,.parks{grid-template-columns:1fr}.sheet{max-height:96vh;border-radius:16px}.summarybox dl{grid-template-columns:110px 1fr}.topactions .topbtn:not(.primary){display:none}}
+
+/* Restored itinerary viewer */
+.importnote{margin-top:13px;padding:11px 12px;border-radius:11px;background:#fff4de;color:#6c4f20;border:1px solid #ebd9ac;font-size:12px}
+.detailnav{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.detailnav button.active{background:var(--forest);color:#fff}
+.dayitem{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:14px;margin-bottom:9px}
+.dayitem h4{margin:0 0 4px;font-size:15px}
+.dayitem p{margin:3px 0;font-size:12px;color:var(--muted)}
+.dayitem ul{margin:8px 0 0;padding-left:21px}
+.dayitem li{margin:3px 0}
+.staymeta{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.smalltag{background:#e5eee8;color:#365c49;border-radius:8px;padding:3px 7px;font-size:11px}
+.smalltag.warn{background:#fff0dd;color:#825d25}
+.compactrow{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:start}
+.compactrow .seq{height:32px;width:32px;border-radius:50%;background:#e5eee8;display:grid;place-items:center;color:var(--forest);font-weight:800}
+.morebar{text-align:center;margin:14px}
 </style>
 </head>
 <body>
@@ -29,7 +45,7 @@
 <div class="hero"><div class="eyebrow">NPT Trip Builder</div><h2>Plan your own national park adventure.</h2><p>Choose your dates, starting location, parks, vehicle and camping preferences. NPT will use those choices to build the foundation for your route and itinerary.</p><div class="actions"><button class="bigbtn light" onclick="startWizard()">Create My Trip</button><button class="bigbtn ghost" onclick="loadDemo()">See an Example</button></div></div>
 <div class="sidecard"><h3>Designed around your trip</h3><p>Each traveler gets their own saved trips instead of seeing someone else's itinerary by default.</p><div class="mini"><div><b>Private</b><span>Saved on this device</span></div><div><b>Share</b><span>Send a trip link</span></div><div><b>Copy</b><span>Friends can duplicate</span></div><div><b>Flexible</b><span>RV, car, van & more</span></div></div></div>
 </div>
-<div class="section"><div class="sectionhead"><div><h3>My Trips</h3><p>Trips saved in this browser</p></div><button class="btn primary" onclick="startWizard()">+ New Trip</button></div><div id="tripList"></div></div>
+<div class="section"><div class="sectionhead"><div><h3>My Trips</h3><p>For now, saved privately in this browser while cloud accounts are being connected.</p></div><div><button class="btn" id="importTripBtn">Import Existing NPT Trip</button> <button class="btn primary" onclick="startWizard()">+ New Trip</button></div></div><div id="tripList"></div><input type="file" id="nptImportFile" accept=".json,application/json" hidden><div class="importnote"><strong>Restoring your existing tour?</strong> Download your private NPT import file from our conversation, then select <strong>Import Existing NPT Trip</strong>. The file is read on your device; it is not uploaded to GitHub. Cloud account sync and secure sharing are not active yet.</div></div>
 </section>
 
 <section id="viewer" class="viewer">
@@ -43,6 +59,7 @@
 <dt>Driving</dt><dd id="vDriving"></dd>
 </dl></div>
 <div class="section"><div class="sectionhead"><div><h3>Parks</h3><p>Selected for this trip</p></div></div><div class="parkchips" id="vParks"></div></div>
+<div class="section" id="detailsSection" style="display:none"><div class="sectionhead"><div><h3>Full Itinerary</h3><p id="detailsSubtitle">Original planning records</p></div></div><div class="detailnav" id="detailsButtons"></div><div id="detailsList"></div><div class="morebar"><button class="btn" id="loadMoreDetails" style="display:none">Show more</button></div></div>
 <div class="section" id="ownerShare"><div class="sectionhead"><div><h3>Privacy & Sharing</h3><p>Control how this trip is shared</p></div></div><div class="summarybox">
 <div><strong id="shareStatus"></strong><p id="shareExplain"></p></div>
 <button class="btn primary" id="shareBtn">Create / Copy Share Link</button>
@@ -192,6 +209,7 @@ function showTrip(t,isOwner){
  $("#ownerShare").style.display=isOwner?"block":"none";$("#copyTripBtn").style.display=isOwner?"none":"inline-block";
  if(isOwner){$("#shareStatus").textContent=t.privacy==="link"?"This trip can be shared by link.":"This trip is private.";$("#shareExplain").textContent=t.privacy==="link"?"Anyone with the link can view and copy it.":"Trip data stays in this browser unless you create a share link.";$("#shareBtn").onclick=()=>createShareLink(t)}
  else{$("#copyTripBtn").onclick=()=>copySharedTrip(t)}
+ $("#shareBox").classList.remove("show");renderItinerary(t);
  window.scrollTo(0,0)
 }
 function showHome(){$("#viewer").classList.remove("open");$("#home").style.display="block";activeTripId=null;sharedTrip=null;history.replaceState(null,"",location.pathname+location.search);renderTrips();window.scrollTo(0,0)}
@@ -203,6 +221,73 @@ function copySharedTrip(t){const copy={...t,id:crypto.randomUUID?crypto.randomUU
 function checkShared(){if(location.hash.startsWith("#share=")){const t=decodeTrip(location.hash.slice(7));if(t&&t.name&&Array.isArray(t.parks)){sharedTrip=t;showTrip(t,false);return true}}return false}
 function loadDemo(){const demo={id:"demo",name:"2028 National Park Tour",startDate:"2028-06-01",length:90,startLocation:"Chicago, IL",endLocation:"Chicago, IL",travelers:2,parks:["Badlands National Park","Wind Cave National Park","Grand Teton National Park","Yellowstone National Park","Glacier National Park","Banff National Park","Olympic National Park","Mount Rainier National Park","Crater Lake National Park","Redwood National and State Parks","Yosemite National Park","Death Valley National Park","Joshua Tree National Park","Sequoia National Park","Grand Canyon National Park","Mesa Verde National Park","Great Sand Dunes National Park","Rocky Mountain National Park"],vehicle:{type:"fifthWheel",rvLength:"29.9",rigLength:"",rigHeight:"",model:"Brinkley Z 2700 class"},preferences:{campground:"National Park campground first",maxDriveHours:7,fhuCadence:3,pace:"Balanced",pet:true,avoidMountain:false,avoidUnpaved:true},privacy:"private"};showTrip(demo,false)}
 $("#importBtn").onclick=()=>{const url=prompt("Paste an NPT share link:");if(!url)return;try{const h=new URL(url).hash;if(h.startsWith("#share=")){location.hash=h;checkShared()}else alert("That does not look like an NPT share link.")}catch{alert("Please paste a valid NPT share link.")}}
+
+let viewedItineraryTrip=null, detailMode="stops", detailCount=20;
+function renderItinerary(t){
+ viewedItineraryTrip=t;
+ const hasData=Array.isArray(t.days)&&t.days.length>0;
+ $("#detailsSection").style.display=hasData?"block":"none";
+ if(!hasData)return;
+ $("#detailsSubtitle").textContent=t.days.length+" day entries • "+(t.segments?.length||0)+" route segments • "+(t.campgrounds?.length||0)+" campgrounds • original Swift planning draft";
+ detailMode="stops";detailCount=20;
+ renderDetails();
+ if(t.restorationStatus){
+   $("#shareBtn").disabled=true;
+   $("#shareBtn").title="Secure sharing will be enabled after Supabase authentication is connected";
+   $("#shareExplain").textContent="This restored draft is private on this device. Secure sharing will be enabled after your account and cloud database are connected.";
+ }else{
+   $("#shareBtn").disabled=false;
+   $("#shareBtn").title="";
+ }
+}
+function renderDetails(){
+ const t=viewedItineraryTrip;if(!t)return;
+ const tabs=[["stops","Route stops"],["days","Day by day"],["campgrounds","Campgrounds"],["reservations","Reservations"]];
+ $("#detailsButtons").innerHTML=tabs.map(([key,label])=>'<button class="btn'+(detailMode===key?" active":"")+'" data-detailmode="'+key+'">'+label+'</button>').join("");
+ $("[data-detailmode]").forEach(btn=>btn.onclick=()=>{detailMode=btn.dataset.detailmode;detailCount=20;renderDetails()});
+ const box=$("#detailsList");const more=$("#loadMoreDetails");box.innerHTML="";more.style.display="none";
+ if(detailMode==="reservations"){
+   box.innerHTML='<div class="importnote">The restored file contains campground research and planning notes, not confirmed reservations. Availability, booking windows, and campground security-incident records still need verification.</div>';
+   return;
+ }
+ const entries=detailMode==="stops"?(t.segments||[]):detailMode==="days"?(t.days||[]):(t.campgrounds||[]);
+ const shown=entries.slice(0,detailCount);const cards=document.createElement("div");
+ for(let i=0;i<shown.length;i++){
+   const e=shown[i];const article=document.createElement("article");article.className="dayitem";
+   if(detailMode==="stops"){
+    article.innerHTML='<div class="compactrow"><div class="seq">'+(e.sequence||i+1)+'</div><div><h4>'+esc(e.park)+'</h4><p>'+esc(e.location)+' · '+esc(e.campground)+'</p><p>'+esc(e.notes)+'</p><div class="staymeta"><span class="smalltag">'+e.nights+' night'+(e.nights===1?"":"s")+'</span><span class="smalltag">'+esc(e.hookups)+'</span></div></div><span class="smalltag warn">'+(e.driveMiles===null?"Travel TBD":e.driveMiles+" mi*")+'</span></div>';
+   }else if(detailMode==="days"){
+    const acts=(e.activities||[]).map(a=>'<li>'+esc(a)+'</li>').join("");
+    const driving=e.driveFrom?'<p><strong>Drive:</strong> '+esc(e.driveFrom)+' → '+esc(e.driveTo)+(e.driveMiles!=null?" · "+e.driveMiles+" planned mi*":"")+'</p>':"";
+    article.innerHTML='<h4>Day '+e.dayNumber+' · '+esc(e.park)+'</h4><p>'+esc(e.location)+' · '+esc(e.campground||"Return home")+'</p>'+driving+'<ul>'+acts+'</ul><div class="staymeta"><span class="smalltag">'+esc(e.hookups||"Travel day")+'</span>'+(e.nightsSinceFullHookup!=null?'<span class="smalltag">Night '+e.nightsSinceFullHookup+' since FHU</span>':"")+'</div><p>'+esc(e.notes)+'</p>';
+   }else{
+    article.innerHTML='<h4>'+esc(e.name)+'</h4><p>'+esc(e.park)+' · '+esc(e.location)+'</p><div class="staymeta"><span class="smalltag">'+esc(e.hookups)+'</span><span class="smalltag warn">Availability unverified</span><span class="smalltag warn">Security incidents unverified</span></div><p>'+esc(e.reservationNotes)+'</p><p>'+esc(e.notes)+'</p>';
+   }
+   cards.append(article);
+ }
+ box.append(cards);
+ if(entries.length>detailCount){
+  more.style.display="inline-block";more.textContent="Show more ("+(entries.length-detailCount)+" remaining)";
+  more.onclick=()=>{detailCount+=25;renderDetails()};
+ }
+ if(detailMode==="stops"||detailMode==="days"){
+  box.insertAdjacentHTML("beforeend",'<p style="font-size:12px;color:var(--muted)">* Route mileage, travel time, and reservations are estimates from the original phone-testing plan, not verified directions or bookings.</p>');
+ }
+}
+async function importNPTFile(file){
+ if(!file)return;
+ if(file.size>3000000){alert("Please select a smaller NPT JSON file.");return}
+ try{
+  const parsed=JSON.parse(await file.text());
+  if(parsed.format!=="npt-trip-import-v1"||!parsed.trip||!Array.isArray(parsed.trip.days)||parsed.trip.days.length>500||!Array.isArray(parsed.trip.parks))throw Error("This isn't a recognized NPT trip export.");
+  const t={...parsed.trip,id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),privacy:"private",createdAt:new Date().toISOString(),importedFromSwift:true};
+  const trips=readTrips();trips.push(t);writeTrips(trips);renderTrips();openTrip(t.id);
+  alert("Imported "+t.days.length+" planning days and "+(t.campgrounds?.length||0)+" campground records. The trip is private in this browser. Please review the draft before publishing or booking.");
+ }catch(e){alert("Import failed: "+(e.message||"invalid file"))}
+}
+$("#importTripBtn").addEventListener("click",()=>$("#nptImportFile").click());
+$("#nptImportFile").addEventListener("change",e=>{importNPTFile(e.target.files[0]);e.target.value=""});
+
 buildParks();buildVehicles();renderTrips();if(!checkShared())showHome();
 </script>
 </body>
