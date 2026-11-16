@@ -323,7 +323,7 @@
       const token=hash.slice(10);
       if(!/^[a-f0-9-]{36}$/i.test(token))return;
       try{
-        const resp=await fetch(URL+"/functions/v1/npt-unlisted-read?token="+encodeURIComponent(token),{cache:"no-store"});
+        const resp=await fetch(URL+"/functions/v1/npt-unlisted-read",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token}),cache:"no-store"});
         if(!resp.ok)throw Error("The link has expired, been revoked, or the trip was made private.");
         const data=await resp.json();
         const t=tripFromRow(data);window.showTrip(t,false);
