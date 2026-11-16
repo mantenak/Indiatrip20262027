@@ -37,18 +37,29 @@
 .compactrow{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:10px;align-items:start}
 .compactrow .seq{height:32px;width:32px;border-radius:50%;background:#e5eee8;display:grid;place-items:center;color:var(--forest);font-weight:800}
 .morebar{text-align:center;margin:14px}
+#myTrips{margin-top:0}
+#myTrips h2{margin:0;font-size:28px}
+.homeactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.topactions #nptAccountBtn{display:block}
 </style>
 </head>
 <body>
 <div class="app">
-<header class="top"><div class="topin"><div class="logo">NP</div><div class="brand"><h1>National Park Trip</h1><p>Plan national & state park adventures</p></div><div class="topactions"><button class="topbtn" id="importBtn">Open shared link</button><button class="topbtn primary" onclick="startWizard()">+ Create trip</button></div></div></header>
+<header class="top"><div class="topin"><div class="logo">NP</div><div class="brand"><h1>National Park Trip</h1></div><div class="topactions"></div></div></header>
 <div class="wrap">
 <section id="home">
-<div class="welcome">
-<div class="hero"><div class="eyebrow">NPT Trip Builder</div><h2>Plan your own national park adventure.</h2><p>Choose your dates, starting location, parks, vehicle and camping preferences. NPT will use those choices to build the foundation for your route and itinerary.</p><div class="actions"><button class="bigbtn light" onclick="startWizard()">Create My Trip</button><button class="bigbtn ghost" onclick="loadDemo()">See an Example</button></div></div>
-<div class="sidecard"><h3>Designed around your trip</h3><p>This early version saves local drafts. Secure accounts, public trips and device sync are next.</p><div class="mini"><div><b>Private</b><span>Saved on this device</span></div><div><b>Share</b><span>Cloud sharing next</span></div><div><b>Copy</b><span>Friends can duplicate</span></div><div><b>Flexible</b><span>RV, car, van & more</span></div></div></div>
+<div class="section" id="myTrips">
+  <div class="sectionhead">
+    <h2>My Trips</h2>
+    <button class="btn primary" onclick="startWizard()">+ New trip</button>
+  </div>
+  <div id="tripList"></div>
+  <div class="homeactions">
+    <button class="btn" id="importTripBtn">Import trip backup</button>
+    <button class="btn" id="importBtn">Open shared link</button>
+  </div>
+  <input type="file" id="nptImportFile" accept=".json,application/json" hidden>
 </div>
-<div class="section"><div class="sectionhead"><div><h3>My Trips</h3><p>For now, saved privately in this browser while cloud accounts are being connected.</p></div><div><button class="btn" id="importTripBtn">Import Existing NPT Trip</button> <button class="btn primary" onclick="startWizard()">+ New Trip</button></div></div><div id="tripList"></div><input type="file" id="nptImportFile" accept=".json,application/json" hidden><div class="importnote"><strong>Restoring your existing tour?</strong> Download your private NPT import file from our conversation, then select <strong>Import Existing NPT Trip</strong>. The file is read on your device; it is not uploaded to GitHub. Cloud account sync and secure sharing are not active yet.</div></div>
 </section>
 
 <section id="viewer" class="viewer">
