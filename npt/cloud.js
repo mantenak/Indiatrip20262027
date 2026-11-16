@@ -91,7 +91,7 @@
     };
     $("#refreshPublicTrips").onclick = refreshPublic;
     // The original browser-backup import button is now gated behind sign-in.
-    $("#importTripBtn").onclick = () => { if(!user)return showAuth("import"); $("#nptImportFile").click(); };
+    const oldImport = $("#importTripBtn"); const importButton = oldImport.cloneNode(true); oldImport.replaceWith(importButton); importButton.onclick = () => { if(!user)return showAuth("import"); $("#nptImportFile").click(); };
     $("#importBtn").onclick = () => {
       const url = prompt("Paste a public or unlisted NPT trip link:");
       if(!url)return;
