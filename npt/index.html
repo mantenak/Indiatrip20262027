@@ -299,6 +299,7 @@ function renderDetails(){
  if(detailMode==="stops"||detailMode==="days"){
   box.insertAdjacentHTML("beforeend",'<p style="font-size:12px;color:var(--muted)">* Route mileage, travel time, and reservations are estimates from the original phone-testing plan, not verified directions or bookings.</p>');
  }
+ if(detailMode==="days")window.renderPlanEditor?.(box,t,selectedDayIndex);
 }
 async function importNPTFile(file){
  if(!file)return;
