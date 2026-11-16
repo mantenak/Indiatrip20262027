@@ -127,12 +127,22 @@
       const {error} = await db.auth.signInWithOtp({email,options:{emailRedirectTo:currentRoot(),shouldCreateUser:true}});
       if(error)throw error;
       $("#nptAuthFeedback").textContent="Check your inbox. Open the sign-in link on this device to finish signing in.";
-    }catch(error){$("#nptAuthFeedback").textContent=error.message||"Unable to send sign-in link.";}
+    }catch(error){$("#nptAuthFeedback").textContent=/not authorized/i.test(error.message||"") ? "Email sign-in is currently limited to organization members. The site owner must configure custom SMTP for friends." : (error.message||"Unable to send sign-in link.");}
     finally{btn.disabled=false;}
   }
   function accountMenu() {
     if(!user)return showAuth();
     alert("Signed in as " + (user.email || "NPT user") + ". Your trips are stored in Supabase.");
+  }
+  async function ensureProfile() {
+    if(!user)return;
+    const {data,error}=await db.from("npt_profiles").select("user_id").eq("user_id",user.id).maybeSingle();
+    if(error){displayError(error);return;}
+    if(!data){
+      const display=(user.email||"NPT traveler").split("@")[0].slice(0,80);
+      const created=await db.from("npt_profiles").insert({user_id:user.id,display_name:display});
+      if(created.error)displayError(created.error);
+    }
   }
   function updateUI() {
     $("#nptAccountBtn").textContent=user ? "My account" : "Sign in";
@@ -338,12 +348,13 @@
       user=session&&session.user||null;
       if(user)hideAuth();
       updateUI();
-      setTimeout(()=>{refreshMine();refreshPublic();},0);
+      setTimeout(()=>{ensureProfile();refreshMine();refreshPublic();},0);
     });
     const {data,error}=await db.auth.getSession();
     if(error)displayError(error);
     user=data?.session?.user||null;
     updateUI();
+    await ensureProfile();
     await Promise.all([refreshMine(),refreshPublic()]);
     loaded=true;
     if(location.hash.startsWith("#public=")||location.hash.startsWith("#unlisted="))await viewHash();
