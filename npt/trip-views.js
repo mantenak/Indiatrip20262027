@@ -343,21 +343,42 @@
     tooltip.setLatLng(stop.point).setContent(label);
     if(!state.map.hasLayer(tooltip)) tooltip.addTo(state.map);
   }
+  const officialParkPhotos={
+    "Badlands National Park":["badl","mwr","C4524107-A9DF-29E3-80B8554266867C06","Badlands formations"],
+    "Glacier National Park":["glac","imr","C5A56E57-BB50-A74E-C7FA6F9F2218D91F","Glacier beneath rocky mountains"],
+    "Yosemite National Park":["yose","pwr","36C683FE-1DD8-B71B-0B6B4AE9C34946B8","Granite cliffs and a waterfall in Yosemite"],
+    "Grand Canyon National Park":["grca","imr","99556161-1DD8-B71B-0B896E4D786C6B47","Grand Canyon buttes beneath a blue sky"],
+    "Yellowstone National Park":["yell","imr","22D0798C-F552-D488-C5047B379DB6005C","Northern lights over Yellowstone’s hydrothermal terraces"]
+  };
+  function appendStopPhoto(entry,src,alt,description,url,creditLabel){
+    if(!entry.card.isConnected) return;
+    const photo=el("figure",undefined,{style:"margin:8px 0 0"});
+    const image=el("img",undefined,{src,alt,loading:"lazy",style:"display:block;width:100%;max-height:200px;object-fit:cover;border-radius:8px"});
+    image.onerror=()=>photo.remove();
+    const caption=el("figcaption",description+" · ");
+    caption.append(el("a",creditLabel,{href:url,target:"_blank",rel:"noopener noreferrer"}));
+    photo.append(image,caption);
+    entry.card.append(photo);
+  }
   const detailedPhotos=new Map();
   function loadStopPhotos(state,entries) {
     if(state.trip.privacy!=="public"||!entries.length) return;
+    const photoEntries=[];
     for(const entry of entries){
-      if(entry.type!=="Campground"||entry.name!=="Madison Campground"||entry.park!=="Yellowstone National Park") continue;
-      const photo=el("figure",undefined,{style:"margin:8px 0 0"});
-      const image=el("img",undefined,{src:"https://www.nps.gov/yell/planyourvisit/images/madison_4.jpg",alt:"Example campsite at Madison Campground",
-        loading:"lazy",style:"display:block;width:100%;max-height:200px;object-fit:cover;border-radius:8px"});
-      image.onerror=()=>photo.remove();
-      const caption=el("figcaption","Example campsite · ");
-      caption.append(el("a","National Park Service / Diane Renkin",{href:"https://www.nps.gov/yell/planyourvisit/madisoncg.htm",target:"_blank",rel:"noopener noreferrer"}));
-      photo.append(image,caption);
-      entry.card.append(photo);
+      if(entry.type==="Campground"){
+        if(entry.name==="Madison Campground"&&entry.park==="Yellowstone National Park"){
+          appendStopPhoto(entry,"https://www.nps.gov/yell/planyourvisit/images/madison_4.jpg","Example campsite at Madison Campground",
+            "Example campsite","https://www.nps.gov/yell/planyourvisit/madisoncg.htm","National Park Service / Diane Renkin");
+        }
+        continue;
+      }
+      const official=Object.hasOwn(officialParkPhotos,entry.name)?officialParkPhotos[entry.name]:null;
+      if(official){
+        const [park,region,file,alt]=official;
+        appendStopPhoto(entry,`https://www.nps.gov/common/uploads/banner_image/${region}/homepage/${file}.jpg`,alt,
+          "Park photo",`https://www.nps.gov/${park}/index.htm`,"National Park Service");
+      }else if(!entry.name.includes("|")) photoEntries.push(entry);
     }
-    const photoEntries=entries.filter(entry=>entry.type!=="Campground"&&!entry.name.includes("|"));
     if(!photoEntries.length) return;
     const titles=[...new Set(photoEntries.map(entry=>entry.name))].slice(0,50);
     const key=titles.join("|");
@@ -373,14 +394,8 @@
         const page=pages.find(item=>item.title?.toLowerCase()===entry.name.toLowerCase()&&!item.missing);
         const source=page?.thumbnail?.source;
         if(!source?.startsWith("https://upload.wikimedia.org/")||!page.pageimage) continue;
-        const photo=el("figure",undefined,{style:"margin:8px 0 0"});
-        const image=el("img",undefined,{src:source,alt:entry.name,loading:"lazy",style:"display:block;width:100%;max-height:200px;object-fit:cover;border-radius:8px"});
-        image.onerror=()=>photo.remove();
-        const credit=el("a","Photo credit",{href:"https://commons.wikimedia.org/wiki/File:"+encodeURIComponent(page.pageimage),target:"_blank",rel:"noopener noreferrer"});
-        const caption=el("figcaption",entry.type+" photo · ");
-        caption.append(credit);
-        photo.append(image,caption);
-        entry.card.append(photo);
+        appendStopPhoto(entry,source,entry.name,entry.type+" photo",
+          "https://commons.wikimedia.org/wiki/File:"+encodeURIComponent(page.pageimage),"Photo credit");
       }
     });
   }
