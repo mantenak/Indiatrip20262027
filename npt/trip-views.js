@@ -375,6 +375,16 @@
     state.pause.hidden=true;
     state.overview.hidden=true;
   }
+  function fitPreviewLeg(map,L,points,reduced,speed) {
+    const size=map.getSize();
+    const options={
+      padding:[Math.min(122,Math.floor(size.x/4)),Math.min(75,Math.floor(size.y/5))],
+      maxZoom:13
+    };
+    const bounds=L.latLngBounds(points);
+    if(reduced) map.fitBounds(bounds,{...options,animate:false});
+    else map.flyToBounds(bounds,{...options,duration:0.5/speed});
+  }
   function playPreview(state) {
     if(!state.map) return;
     state.select(null);
@@ -395,30 +405,16 @@
     preview.nextLabel=L.tooltip({permanent:true,direction:"bottom",offset:[0,13],opacity:1});
     showPreviewStop(state,preview.currentLabel,stops[0]);
     previewHighlights(state,stops[0]);
-    map.setView(stops[0].point,9,{animate:false});
     const tick=now=>{
       if(state.preview!==preview||preview.paused) return;
       const from=stops[preview.index], to=stops[preview.index+1];
       if(preview.newLeg){
         const road=to.index===from.index+1?state.roads?.[from.index]:null;
-        preview.sample=previewLeg(road?[from.point,...road,to.point]:[from.point,to.point]);
+        preview.points=road?[from.point,...road,to.point]:[from.point,to.point];
+        preview.sample=previewLeg(preview.points);
         const miles=milesBetween(from.point,to.point);
-        preview.zoom=miles<100?8.5:7.5;
-        preview.close=miles<35;
-        preview.following=false;
-        preview.approaching=false;
-        preview.nextLabel.remove();
-        if(preview.close&&miles>0){
-          const center=from.point.map((value,k)=>(value+to.point[k])/2);
-          const fitZoom=map.getBoundsZoom(L.latLngBounds([from.point,to.point]),false,[110,110]);
-          const zoom=Math.min(13,fitZoom);
-          if(reduced) map.setView(center,zoom,{animate:false});
-          else map.flyTo(center,zoom,{duration:0.45});
-          showPreviewStop(state,preview.nextLabel,to);
-        } else if(!preview.close&&map.getZoom()!==Math.round(preview.zoom)){
-          if(reduced) map.setView(from.point,preview.zoom,{animate:false});
-          else map.flyTo(from.point,preview.zoom,{duration:0.45});
-        }
+        fitPreviewLeg(map,L,preview.points,reduced,state.speed);
+        if(miles>0) showPreviewStop(state,preview.nextLabel,to);
         preview.hold=preview.index===0?950:1500;
         preview.travel=Math.min(4500,Math.max(1850,1600+miles*7));
         preview.newLeg=false;
@@ -426,16 +422,7 @@
       if(preview.last!==null) preview.elapsed+=Math.max(0,now-preview.last)*state.speed;
       preview.last=now;
       const fraction=Math.min(1,Math.max(0,(preview.elapsed-preview.hold)/preview.travel));
-      if(!preview.close&&fraction>=0.6&&fraction<1&&!preview.approaching){
-        showPreviewStop(state,preview.nextLabel,to);
-        preview.approaching=true;
-      }
-      if(!preview.close&&!reduced&&fraction>0&&fraction<1&&!preview.following){
-        preview.following=true;
-        map.panTo(to.point,{animate:true,duration:(1-fraction)*preview.travel/(1000*state.speed),easeLinearity:1});
-      }
       if(fraction>0&&(!reduced||fraction===1)) preview.marker.setLatLng(preview.sample(fraction));
-      if(reduced&&!preview.close&&fraction===1) map.panTo(to.point,{animate:false});
       if(fraction===1){
         preview.nextLabel.remove();
         showPreviewStop(state,preview.currentLabel,to);
@@ -458,8 +445,11 @@
       if(preview.paused){
         cancelAnimationFrame(preview.frame);
         map.stop();
-        preview.following=false;
-      } else {preview.last=null;preview.frame=requestAnimationFrame(tick);}
+      } else {
+        if(preview.points&&!preview.newLeg) fitPreviewLeg(map,L,preview.points,reduced,state.speed);
+        preview.last=null;
+        preview.frame=requestAnimationFrame(tick);
+      }
     };
     preview.frame=requestAnimationFrame(tick);
   }
@@ -518,14 +508,7 @@
     const speed=el("select",undefined,{"aria-label":"Preview speed"});
     speed.append(el("option","0.5× speed",{value:"0.5"}),el("option","Normal speed",{value:"1"}),el("option","2× speed",{value:"2"}),el("option","4× speed",{value:"4"}));
     speed.value="1";
-    speed.onchange=()=>{
-      state.speed=Number(speed.value);
-      if(state.preview?.following){
-        state.map.stop();
-        state.preview.following=false;
-        state.preview.last=null;
-      }
-    };
+    speed.onchange=()=>{state.speed=Number(speed.value);};
     const state={root,trip,key,panel,pause,overview,speed:1,dayIndex:null,abort:new AbortController(),
       route:[point(trip.preferences?.mapStart),...trip.segments.map(s=>point(s.mapPoint)),point(trip.preferences?.mapEnd)],
       select(index){
