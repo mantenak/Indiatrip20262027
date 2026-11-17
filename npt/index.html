@@ -43,6 +43,7 @@
 .topactions #nptAccountBtn{display:block}
 </style>
 <link rel="stylesheet" href="./trip-views.css">
+<link rel="stylesheet" href="./planner.css?v=trip-planner-1">
 </head>
 <body>
 <div class="app">
@@ -309,7 +310,7 @@ function renderDetails(){
   more.onclick=()=>{detailCount+=25;renderDetails()};
  }
  if(detailMode==="stops"||detailMode==="days"){
-  box.insertAdjacentHTML("beforeend",'<p style="font-size:12px;color:var(--muted)">* Route mileage, travel time, and reservations are estimates from the original phone-testing plan, not verified directions or bookings.</p>');
+  box.insertAdjacentHTML("beforeend",'<p style="font-size:12px;color:var(--muted)">* Route mileage, travel time, and reservations are planning estimates. Check road restrictions and confirm reservations before travel.</p>');
  }
  if(detailMode==="days")window.renderPlanEditor?.(box,t,selectedDayIndex);
 }
@@ -334,7 +335,9 @@ const isAuthCallback = /[?&](code|error|error_code)=/.test(location.search)
 if (!isAuthCallback && !checkShared() && !location.hash.startsWith("#public=") && !location.hash.startsWith("#unlisted=")) showHome();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.76.1" defer></script>
-<script src="./trip-views.js?v=drive-attraction-pins" defer></script>
-<script src="./cloud.js?v=drive-manual" defer></script>
+<script src="./trip-views.js?v=trip-planner-1" defer></script>
+<script src="./cloud.js?v=trip-planner-1" defer></script>
+<script src="./planner-core.js?v=trip-planner-1" defer></script>
+<script src="./planner.js?v=trip-planner-1" defer></script>
 </body>
 </html>

@@ -1,0 +1,14 @@
+const assert=require('node:assert/strict');
+const C=require('./planner-core.js');
+assert.equal(C.miles([0,0],[0,0]),0);
+assert.ok(C.miles([41.88,-87.63],[40.71,-74])>700);
+assert.equal(C.fit({rv_allowed:true,max_rv_length_ft:35,max_trailer_length_ft:24},{type:'fifthWheel',rvLength:33}).ok,false);
+assert.equal(C.fit({rv_allowed:true,max_rv_length_ft:35},{type:'motorhome',rvLength:33}).unknown,false);
+assert.equal(C.fit({},{type:'fifthWheel',rvLength:33}).unknown,true);
+assert.notEqual(C.hookups({electric_hookups:true}),'Full hookups');
+const parks=[{id:'a',name:'Near',latitude:0,longitude:1,designation:'national_park'},{id:'b',name:'Far',latitude:0,longitude:5,designation:'national_park'}];
+assert.equal(C.chooseParks(parks,[0,0],[0,0],14,6,50).length,0);
+assert.equal(C.chooseParks(parks,[0,0],[0,0],14,6,250)[0].id,'a');
+const model={basics:{days:4,date:'2028-06-01',name:'Test',start:{name:'Home',point:[0,0]},end:{name:'Home',point:[0,0]},vehicle:{type:'car'},distance:250,hours:6},stops:[{park:parks[0],nights:3,campground:null,activities:[{name:'Walk'}]}]};
+const trip=C.buildTrip(model);assert.equal(trip.length,4);assert.equal(trip.privacy,'private');assert.equal(trip.preferences.preferredDriveMiles,250);assert.deepEqual(trip.days[0].activities,['Walk']);assert.equal(trip.days[3].driveTo,'Home');assert.equal(trip.segments[0].driveMiles,null);
+console.log('Planner regression checks passed.');

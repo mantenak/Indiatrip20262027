@@ -252,7 +252,17 @@
     await refreshMine();
     return data.id;
   }
-  window.startWizard = function() { if(!db) return alert("NPT Cloud is unavailable."); if(!user)return showAuth();oldStartWizard();};
+  window.startWizard = function() { if(!db) return alert("NPT Cloud is unavailable."); if(!user)return showAuth();if(window.openNptPlanner)window.openNptPlanner();else oldStartWizard();};
+  window.nptCloud={db,signedIn:()=>Boolean(user),saveProposal:async (proposal,existing)=>{
+    if(!user)throw Error("Sign in before saving your trip.");
+    if(!existing)return savePayload(proposal,"private");
+    if(!mine.some(t=>t.id===existing.id)||!existing.updatedAt)throw Error("Reopen this trip from My Trips before editing.");
+    const value=payload(proposal,existing.privacy||"private");
+    const {data,error}=await db.from("npt_trips").update(value).eq("id",existing.id).eq("owner_id",user.id).eq("updated_at",existing.updatedAt).select("id").maybeSingle();
+    if(error)throw error;
+    if(!data)throw Error("This trip changed on another device. Reopen it from My Trips before saving.");
+    await refreshMine();return data.id;
+  }};
   window.saveTrip = async function() {
     if(!user){showAuth();return;}
     if($("#nextBtn"))$("#nextBtn").disabled=true;
@@ -287,10 +297,15 @@
     window.nptCanEdit=()=>Boolean(isOwner&&user&&lastViewed===t);
     oldShowTrip(t,isOwner);
     $("#nptTripMapButton")?.remove();
+    $("#nptEditProposal")?.remove();
+    if(t.preferences?.planner){
+      const preview=document.createElement("button");preview.className="btn primary";preview.id="nptTripMapButton";preview.textContent="Preview Drive";preview.onclick=()=>window.openNptWalk(t);$("#viewer .viewerbar").append(preview);
+      if(isOwner){const edit=document.createElement("button");edit.className="btn";edit.id="nptEditProposal";edit.textContent="Edit itinerary";edit.onclick=()=>window.editNptProposal(t);$("#viewer .viewerbar").append(edit);}
+    }
     const publicMap=t.privacy==="public"?t:isOwner?publicTrips.find(trip=>
       t.name.replace(/ — restored draft$/,"")===trip.name&&t.length===trip.length
     ):null;
-    if(publicMap?.days.length){
+    if(publicMap?.days.length&&!t.preferences?.planner){
       const button=document.createElement("button");
       button.id="nptTripMapButton";
       button.className="btn primary";
