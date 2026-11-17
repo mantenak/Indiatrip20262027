@@ -363,16 +363,33 @@
     entry.card.append(photo);
     entry.onPhoto?.({src,alt,description,url,creditLabel});
   }
+  const campgroundGalleries={
+    "Alamogordo / White Sands KOA Journey":["https://koa.com/campgrounds/alamogordo/photos/","KOA",[["https://koa.com/content/campgrounds/alamogordo/photos/31130photo1a4078b0-0699-4521-9e18-377e4afaeb7e.jpg.axd?preset=campgroundphoto","Most of our sites are pull through"],["https://koa.com/content/campgrounds/alamogordo/photos/31130photob7c7c7e3-23bc-41a9-a6e7-91f5e61374aa.jpg.axd?preset=campgroundphoto","We have 30amp and 50 amp sites"]]],
+    "Alamosa KOA Journey":["https://koa.com/campgrounds/alamosa/photos/","KOA",[["https://koa.com/content/campgrounds/alamosa/photos/ccd99fc3-2818-43a4-b8a6-e00a724cda81photo6bcba4cf-0841-4f53-a140-35759db255b9.JPG.axd?preset=campgroundphoto","RV Sites"],["https://koa.com/content/campgrounds/alamosa/photos/IMG5046a3ttsbkffpcm.jpg.axd?preset=campgroundphoto","Big Rig Friendly Sites"]]],
+    "Carlsbad KOA Holiday":["https://koa.com/campgrounds/carlsbad/photos/","KOA",[["https://koa.com/content/campgrounds/carlsbad/photos/31164_67.jpg.axd?preset=campgroundphoto","Treat Yourself to a Patio Site"],["https://koa.com/content/campgrounds/carlsbad/photos/31164_66.jpg.axd?preset=campgroundphoto","Kamping at its Best"]]],
+    "Estes Park KOA Holiday":["https://koa.com/campgrounds/estes-park/photos/","KOA",[["https://koa.com/content/campgrounds/estes-park/photos/06113_4.jpg.axd?preset=campgroundphoto","RV Terrace"],["https://koa.com/content/campgrounds/estes-park/photos/4aec1d34-40a7-457b-91b6-8d399e0011e4photob8e470f4-ed21-49dc-9c88-bb15b1cc7ce4.jpg.axd?preset=campgroundphoto","RV site 07"]]],
+    "Holbrook / Petrified Forest KOA Journey":["https://koa.com/campgrounds/holbrook/photos/","KOA",[["https://koa.com/content/campgrounds/holbrook/photos/d0493f10-ff7a-4e3a-bde3-74dc2da7b576photo860095e2-6f50-4b47-9c33-b4b0b6df2688.jpg.axd?preset=campgroundphoto","Reserve our deluxe patio sites with a firepit and BBQ to complete your RV stay."],["https://koa.com/content/campgrounds/holbrook/photos/d0493f10-ff7a-4e3a-bde3-74dc2da7b576photo3998040a-c6f2-4f68-937f-05656f303a96.jpg.axd?preset=campgroundphoto","Welcome to the Petrified Forest KOA in Holbrook, AZ!"]]],
+    "Hot Springs National Park KOA Holiday":["https://koa.com/campgrounds/hot-springs-national-park/photos/","KOA",[["https://koa.com/content/campgrounds/hot-springs-national-park/photos/5cd8d132-7db4-454e-86f2-f7b477b02f21photo9bd5fac0-ec70-484d-ba39-1bbdfa700062.jpg.axd?preset=campgroundphoto","Spacious RV Sites"],["https://koa.com/content/campgrounds/hot-springs-national-park/photos/5cd8d132-7db4-454e-86f2-f7b477b02f21photo40ea2ef1-8269-41d1-95a5-c930ec39b4a5.jpg.axd?preset=campgroundphoto","Hammock on Patio Site"]]],
+    "Mitchell KOA Journey":["https://koa.com/campgrounds/mitchell/photos/","KOA",[["https://koa.com/content/campgrounds/mitchell/photos/41112photos30914078-deea-4d64-849c-6b7cd42bcde9.jpeg.axd?preset=campgroundphoto","Example of 50 Amp Full Hook Up"],["https://koa.com/content/campgrounds/mitchell/photos/41112photos10fd73bd-f6dc-4e1d-ac15-052f6379f287.jpeg.axd?preset=campgroundphoto","Sunrise on our water electric RV sites"]]],
+    "Mount Rushmore KOA Resort at Palmer Gulch":["https://koa.com/campgrounds/mount-rushmore/photos/","KOA",[["https://koa.com/content/campgrounds/mount-rushmore/photos/a2d6dcc9-5285-4518-b913-713514c53c03photod4dff361-6732-4a20-b680-b3d2f6a947ef.jpg.axd?preset=campgroundphoto","Wide RV Sites"],["https://koa.com/content/campgrounds/mount-rushmore/photos/a2d6dcc9-5285-4518-b913-713514c53c03photob1341af3-b779-4879-bd77-bec3bd914c37.jpg.axd?preset=campgroundphoto","Great RV Sites"]]],
+    "Palm Springs / Joshua Tree KOA Holiday":["https://koa.com/campgrounds/palm-springs/photos/","KOA",[["https://koa.com/content/campgrounds/palm-springs/photos/75caa554-94d1-44ac-a134-e00df1487c6fphoto06e50863-2041-44be-a583-559ddb0c509d.JPG.axd?preset=campgroundphoto","RV Camping in Palm Springs / Joshua Tree National Park"],["https://koa.com/content/campgrounds/palm-springs/photos/75caa554-94d1-44ac-a134-e00df1487c6fphotoce07a5a6-5ffe-479d-89e9-9f9b3606ea9f.PNG.axd?preset=campgroundphoto","Palm Springs / Joshua Tree KOA"]]],
+    "Rapid City / Black Hills KOA Holiday":["https://koa.com/campgrounds/rapid-city/photos/","KOA",[["https://koa.com/content/campgrounds/rapid-city/photos/d2557dcf-66f8-4cd8-919e-2e5ca2517cd7photo97ee9821-f17f-4a79-9d2d-e7aa66b5b6e1.JPG.axd?preset=campgroundphoto","View of the Premium Sites."],["https://koa.com/content/campgrounds/rapid-city/photos/d2557dcf-66f8-4cd8-919e-2e5ca2517cd7photo17899d87-9e96-4576-bcf3-03e92820d588.jpg.axd?preset=campgroundphoto","A secluded water and electric backin site."]]],
+    "Tucson / Lazydays KOA Resort":["https://koa.com/campgrounds/tucson/photos/","KOA",[["https://koa.com/content/campgrounds/tucson/photos/03226photos6ec8f738-2917-41a0-94ca-fe47e67b8f9b.jpeg.axd?preset=campgroundphoto","RV 1688, Pull-Thru 50/30 AMPS FHU KOA Patio® Buddy Site"],["https://koa.com/content/campgrounds/tucson/photos/03226photo394c5121-cb63-4ff9-8432-ac5f09f4586e.jpg.axd?preset=campgroundphoto","Elevated Deck RV Sites"]]],
+    "West Glacier KOA Resort":["https://koa.com/campgrounds/west-glacier/photos/","KOA",[["https://koa.com/content/campgrounds/west-glacier/photos/34ea45ce-5e87-4312-8c2a-72108a87a0c0photoe9d4239f-7bd1-4e41-9f6c-57db11ce57e3.jpg.axd?preset=campgroundphoto","Site #01"],["https://koa.com/content/campgrounds/west-glacier/photos/34ea45ce-5e87-4312-8c2a-72108a87a0c0photo0bc5bd3e-6ea4-4a02-860e-9d5c7836173d.JPG.axd?preset=campgroundphoto","Site #2"]]],
+    "Ellensburg KOA Journey":["https://ellensburgcampresort.com/gallery","Ellensburg Camp Resort",[["https://ellensburgcampresort.com/airo-assets/images/accommodations/rv-sites","RV sites at Ellensburg Camp Resort"]]],
+    "Olympic Peninsula / Port Angeles KOA Journey":["https://salishtrailscampground.com/","Salish Trails RV & Campground Park",[["https://salishtrailscampground.com/wp-content/uploads/2024/06/campground-port-angeles-play-1024x699.png","Playground at Salish Trails Campground"]]],
+    "Spokane KOA Journey":["https://rjourney.com/park/wa/roam-spokane/","Roam Spokane RV Resort",[["https://cdn-sspmsprod.azureedge.net/facilityimages/efeb237c-2135-43b3-91ba-af7745e88e18/e7acb02c-1e16-4718-ab47-35c6d8858ab6/rjourney-roam-spokane-rv-resort-spokane-valley-wa-hero-1.jpg","RV sites at Roam Spokane"],["https://cdn-sspmsprod.azureedge.net/facilityimages/efeb237c-2135-43b3-91ba-af7745e88e18/5ac4b3f9-f3cd-47ef-86bb-300695215ba8/rjourney-roam-spokane-rv-resort-spokane-valley-wa-facility-2.jpg","Fifth-wheel RV site at Roam Spokane"]]]
+  };
   const detailedPhotos=new Map();
   function loadStopPhotos(state,entries) {
     if(state.trip.privacy!=="public"||!entries.length) return;
     const photoEntries=[];
     for(const entry of entries){
       if(entry.type==="Campground"){
-        if(entry.name==="Mitchell KOA Journey"&&/Mitchell/i.test(entry.location||"")){
-          appendStopPhoto(entry,"https://koa.com/content/campgrounds/mitchell/photos/41112photos10fd73bd-f6dc-4e1d-ac15-052f6379f287.jpeg.axd?preset=campgroundphoto",
-            "Water and electric RV sites at Mitchell KOA Journey","Example RV sites",
-            "https://koa.com/campgrounds/mitchell/photos/","Mitchell KOA Journey");
+        const gallery=Object.hasOwn(campgroundGalleries,entry.name)?campgroundGalleries[entry.name]:null;
+        if(gallery){
+          const [url,source,photos]=gallery;
+          photos.forEach(([image,description])=>appendStopPhoto(entry,image,description,description,url,source));
         } else if(entry.name==="Cedar Pass Campground"&&entry.park==="Badlands National Park"){
           appendStopPhoto(entry,"https://cdn.recreation.gov/public/2024/11/22/21/43/10288228_613a142b-e989-433d-9279-561377d4e2e7_700.webp",
             "Cedar Pass Campground in Badlands National Park","Campground photo",
@@ -473,23 +490,47 @@
     state.preview.mapCard=state.L.popup({offset:[0,-13],maxWidth:275,maxHeight:Math.floor(state.map.getSize().y*0.64),autoPanPadding:[12,12],closeOnClick:false})
       .setLatLng(stop.point).setContent(content).openOn(state.map);
     photoHost.addEventListener("toggle",()=>state.preview?.mapCard?.update());
-    let rank=Infinity;
+    let rank=Infinity, photos=[], index=0;
+    function showPhoto(){
+      const {entry,figure}=photos[index];
+      const campground=entry.type==="Campground";
+      const summary=el("summary",campground?"Campground photos":"Stop photo");
+      photoHost.replaceChildren(summary,figure);
+      if(photos.length>1){
+        const controls=el("div",undefined,{style:"display:flex;gap:6px;align-items:center;justify-content:space-between"});
+        const step=by=>{
+          if(state.preview?.dwellTimer!=null) state.preview.toggle();
+          index=(index+by+photos.length)%photos.length;
+          showPhoto();
+        };
+        controls.append(button("‹ Prev",()=>step(-1)),el("span",`${index+1} / ${photos.length}`),button("Next ›",()=>step(1)));
+        photoHost.append(controls);
+      }
+      const firstReveal=photoHost.hidden;
+      photoHost.hidden=false;
+      if(campground&&firstReveal) photoHost.open=true;
+      state.preview?.mapCard?.update();
+    }
     return (entry,photo)=>{
       const priority=entry.type==="Campground"?0:entry.type==="Park or destination"?1:2;
-      if(!photoHost.isConnected||priority>=rank) return;
-      const image=el("img",undefined,{src:photo.src,alt:photo.alt,style:"display:block;width:100%;max-height:105px;object-fit:cover;border-radius:6px"});
+      if(!photoHost.isConnected||priority>rank) return;
+      const image=el("img",undefined,{alt:photo.alt,style:"display:block;width:100%;max-height:130px;object-fit:cover;border-radius:6px"});
       const caption=el("figcaption",entry.name+" · "+photo.description,{style:"font-size:11px;line-height:1.3"});
-      const link=el("a","Photo credit",{href:photo.url,target:"_blank",rel:"noopener noreferrer",style:"font-size:11px"});
+      const link=el("a","Campground gallery or photo credit",{href:photo.url,target:"_blank",rel:"noopener noreferrer",style:"font-size:11px"});
       const figure=el("figure",undefined,{style:"margin:7px 0"});
       figure.append(image,caption,link);
       image.onload=()=>{
-        if(!photoHost.isConnected||priority>=rank) return;
-        rank=priority;
-        photoHost.replaceChildren(el("summary",entry.type==="Campground"?"Campground photo":"Stop photo"),figure);
-        photoHost.hidden=false;
-        if(entry.type==="Campground") photoHost.open=true;
-        state.preview?.mapCard?.update();
+        if(!photoHost.isConnected||priority>rank||photos.some(item=>item.src===photo.src)) return;
+        if(priority<rank){
+          rank=priority;
+          photos=[];
+          index=0;
+          if(entry.type==="Campground") photoHost.open=true;
+        }
+        photos.push({entry,figure,src:photo.src});
+        showPhoto();
       };
+      image.src=photo.src;
     };
   }
   function renderDetailedStop(state,stop,segment,days,attractions,showOnMap) {
