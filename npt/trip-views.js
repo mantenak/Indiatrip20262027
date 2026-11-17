@@ -208,15 +208,26 @@
       const selected=hasDrive&&i===segmentIndex;
       L.polyline(road||[route[i-1],route[i]],{color:selected?"#a64f24":"#285c49",weight:selected?6:3,opacity:full||selected?0.88:0.28,dashArray:road?null:"6 6"}).addTo(state.layers);
     }
+    const lastIndex=route.length-1;
+    const loop=route[0]&&route[lastIndex]&&route[0].every((value,index)=>value===route[lastIndex][index]);
     route.forEach((coords,i)=>{
-      if(!coords) return;
-      const selected=i===segmentIndex;
-      const label=i===0?"Start":i===route.length-1?"End":String(i);
-      const marker=L.marker(coords,{icon:L.divIcon({className:"leaflet-div-icon",html:`<span class="npt-map-pin ${selected?"current":""}">${label}</span>`,iconSize:[25,25],iconAnchor:[12,12]}),
-        title:i===0?trip.startLocation:i===route.length-1?trip.endLocation:trip.segments[i-1].campground||trip.segments[i-1].location});
+      if(!coords||(loop&&i===lastIndex)) return;
+      const selected=i===segmentIndex||(loop&&i===0&&segmentIndex===lastIndex);
+      const endpoint=i===0||i===lastIndex;
+      const label=i===0?(loop?"Start / End":"Start"):i===lastIndex?"End":String(i);
+      const width=endpoint?(loop&&i===0?82:48):25;
+      const marker=L.marker(coords,{icon:L.divIcon({className:"leaflet-div-icon",html:`<span class="npt-map-pin ${selected?"current":""}" style="width:${width}px;border-radius:${endpoint?12:50}${endpoint?"px":"%"}">${label}</span>`,iconSize:[width,25],iconAnchor:[width/2,12]}),
+        zIndexOffset:endpoint?300:0,
+        title:i===0?trip.startLocation:i===lastIndex?trip.endLocation:trip.segments[i-1].campground||trip.segments[i-1].location});
       marker.addTo(state.layers);
-      if(i===0){marker.on("click",()=>state.select(0));return;}
-      if(i===route.length-1){marker.on("click",()=>state.select(trip.days.length-1));return;}
+      if(loop&&i===0){
+        const popup=el("div");
+        popup.append(el("strong",trip.startLocation||"Round trip"),el("br"),
+          button("Departure",()=>state.select(0)),button("Return",()=>state.select(trip.days.length-1)));
+        marker.bindPopup(popup);
+        return;
+      }
+      if(endpoint){marker.on("click",()=>state.select(i===0?0:trip.days.length-1));return;}
       const s=trip.segments[i-1];
       const stayDays=trip.days.map((d,index)=>({d,index})).filter(({d})=>d.segmentNumber===s.sequence);
       const popup=el("div");popup.append(el("strong",s.campground||s.location));
