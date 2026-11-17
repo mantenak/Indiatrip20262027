@@ -20,6 +20,7 @@ async function json(url){const r=await fetch(url,{signal:AbortSignal.timeout(250
 function locationField(title){const box=el('div'),q=input('search','',{placeholder:'City, state or ZIP code','aria-label':title}),results=el('div',null,{class:'np-location-results'});let chosen=null;const go=btn('Find location',()=>run(async()=>{if(q.value.trim().length<2)throw Error('Enter a city or ZIP code.');results.replaceChildren();const d=await json('https://photon.komoot.io/api/?limit=5&lang=en&q='+encodeURIComponent(q.value.trim()));const items=(d.features||[]).filter(f=>['US','CA'].includes(f.properties.countrycode));if(!items.length)throw Error('No U.S. or Canadian location found. Try city and state.');items.forEach(f=>{const p=f.properties,name=[p.name,p.city,p.state,p.country].filter((x,i,a)=>x&&a.indexOf(x)===i).join(',');results.append(btn(name,()=>{chosen={name,point:[f.geometry.coordinates[1],f.geometry.coordinates[0]]};q.value=name;results.replaceChildren(el('small','Location selected'));}));});}));q.oninput=()=>{chosen=null;};box.append(field(title,q),go,results);return {box,get:()=>chosen};}
 window.openNptPlanner=async function(trip=null){
  if(!window.nptCloud?.signedIn()){window.startWizard();return;}
+ window.closeNptWalk?.();window.showHome?.();
  editing=trip;dirty=false;model=trip?.preferences?.planner?JSON.parse(JSON.stringify(trip.preferences.planner)):null;geometry=null;op++;shell(trip?'Edit itinerary':'Plan a new trip');
  if(model){await render();return;}showForm();
 };
