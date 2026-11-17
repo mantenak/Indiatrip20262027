@@ -402,19 +402,69 @@
       }
     });
   }
-  function openDetailedMapCard(state,stop,segment,attractions) {
+  function findDetailedCampground(trip,segment) {
+    if(!segment?.campground) return null;
+    return trip.campgrounds.find(item=>item.name===segment.campground&&
+      (item.park===segment.park||item.location===segment.location))||
+      trip.campgrounds.find(item=>item.name===segment.campground)||null;
+  }
+  const officialStopNotes={
+    "Badlands National Park|Cedar Pass Campground":{
+      text:"Check-in starts at 1 pm. Check-out is 11 am. No generators during quiet hours (10 pm–6 am).",
+      url:"https://www.recreation.gov/camping/campgrounds/10288228",source:"Recreation.gov"
+    },
+    "Yellowstone National Park|Madison Campground":{
+      text:"No electric hookups. About 14 miles east of West Yellowstone and 16 miles north of Old Faithful.",
+      url:"https://www.nps.gov/yell/planyourvisit/madisoncg.htm",source:"National Park Service"
+    }
+  };
+  function detailedStopFacts(trip,segment,days,campground){
+    const first=days[0]?.dayNumber,last=days.at(-1)?.dayNumber;
+    const arrival=first!=null?formatDate(trip.startDate,first):"";
+    const departure=last!=null&&segment?.nights?formatDate(trip.startDate,last+1):"";
+    const traveling=days.find(day=>day.driveFrom&&day.driveTo);
+    const minutes=traveling?.driveMinutes??segment?.driveMinutes;
+    const miles=traveling?.driveMiles??segment?.driveMiles;
+    const duration=Number.isFinite(minutes)&&minutes>0?[Math.floor(minutes/60)?Math.floor(minutes/60)+" hr":"",minutes%60?minutes%60+" min":""].filter(Boolean).join(" "):"";
+    const drive=[Number.isFinite(miles)&&miles>0?miles+" mi":"",duration].filter(Boolean).join(" · ");
+    const stay=[arrival?(departure?arrival+"–"+departure:arrival):first!=null?(first===last?"Day "+first:"Days "+first+"–"+last):"",
+      segment?.nights?segment.nights+(segment.nights===1?" night":" nights"):""].filter(Boolean).join(" · ");
+    return [
+      ["Stay",stay],
+      ["Drive estimate",drive],
+      ["Hookups",segment?.hookups||campground?.hookups],
+      ["Listed RV limit",campground?.maxRVFeet?campground.maxRVFeet+" ft · confirm your site":null]
+    ];
+  }
+  function openDetailedMapCard(state,stop,segment,days,campground,attractions) {
     const title=previewStopTitle(state,stop);
-    const content=el("section",undefined,{"aria-label":title,style:"width:min(205px, 57vw)"});
+    const content=el("section",undefined,{"aria-label":title,style:"width:min(254px, 62vw)"});
     content.append(el("strong",stopSymbol(state.trip,stop.index,state.route.length-1)+" "+title));
-    const details=[segment?.location!==title?segment?.location:null,
-      segment?.nights?segment.nights+(segment.nights===1?" night":" nights"):null,segment?.hookups].filter(Boolean);
-    if(details.length) content.append(el("p",details.join(" · "),{style:"margin:5px 0"}));
-    const photoHost=el("div");
+    if(segment?.location&&segment.location!==title) content.append(el("p",segment.location,{style:"margin:3px 0"}));
+    const facts=el("dl",undefined,{class:"npt-stay-fields",style:"grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:7px 0"});
+    detailedStopFacts(state.trip,segment,days,campground).forEach(([label,value])=>dataRow(facts,label,value));
+    if(facts.childElementCount) content.append(facts);
+    const notes=officialStopNotes[segment?.park+"|"+segment?.campground];
+    if(notes){
+      const row=el("p",notes.text+" ",{style:"margin:6px 0"});
+      row.append(el("a",notes.source,{href:notes.url,target:"_blank",rel:"noopener noreferrer"}));
+      content.append(row);
+    }
+    if(campground?.reservationNotes){
+      const booking=el("p","Booking: "+campground.reservationNotes,{style:"margin:6px 0"});
+      content.append(booking);
+    }
+    const url=campground&&bookingLink(campground);
+    if(url) content.append(el("a","Booking information",{href:url,target:"_blank",rel:"noopener noreferrer"}));
+    if(attractions.length) content.append(el("p","Planned nearby: "+attractions.slice(0,2).join(" · "),{style:"margin:6px 0"}));
+    const photoHost=el("details");
+    photoHost.hidden=true;
+    photoHost.append(el("summary","Stop photo"));
     content.append(photoHost);
-    if(attractions.length) content.append(el("p",attractions.slice(0,2).join(" · "),{style:"margin:5px 0"}));
     state.preview.currentLabel.remove();
-    state.preview.mapCard=state.L.popup({offset:[0,-13],maxWidth:225,autoPanPadding:[12,12],closeOnClick:false})
+    state.preview.mapCard=state.L.popup({offset:[0,-13],maxWidth:275,maxHeight:Math.floor(state.map.getSize().y*0.64),autoPanPadding:[12,12],closeOnClick:false})
       .setLatLng(stop.point).setContent(content).openOn(state.map);
+    photoHost.addEventListener("toggle",()=>state.preview?.mapCard?.update());
     let rank=Infinity;
     return (entry,photo)=>{
       const priority=entry.type==="Campground"?0:entry.type==="Park or destination"?1:2;
@@ -427,7 +477,8 @@
       image.onload=()=>{
         if(!photoHost.isConnected||priority>=rank) return;
         rank=priority;
-        photoHost.replaceChildren(figure);
+        photoHost.replaceChildren(el("summary","Stop photo"),figure);
+        photoHost.hidden=false;
         state.preview?.mapCard?.update();
       };
     };
@@ -446,9 +497,8 @@
       entries.push({card:section,name,type,park:segment?.park});
       return section;
     }
+    const campground=findDetailedCampground(trip,segment);
     if(segment?.campground){
-      const campground=trip.campgrounds.find(item=>item.name===segment.campground&&
-        (item.park===segment.park||item.location===segment.location))||trip.campgrounds.find(item=>item.name===segment.campground);
       const section=card(segment.campground,"Campground",segment.location);
       const fields=el("dl",undefined,{class:"npt-stay-fields"});
       dataRow(fields,"Nights",segment.nights);
@@ -464,7 +514,7 @@
     for(const name of attractions) card(name,"Attraction or activity",segment?.park||segment?.location);
     if(!entries.length) panel.append(el("p","No additional stops or activities are listed here."));
     if(showOnMap){
-      const updateMapPhoto=openDetailedMapCard(state,stop,segment,attractions);
+      const updateMapPhoto=openDetailedMapCard(state,stop,segment,days,campground,attractions);
       for(const entry of entries) entry.onPhoto=photo=>updateMapPhoto(entry,photo);
     }
     loadStopPhotos(state,entries);
