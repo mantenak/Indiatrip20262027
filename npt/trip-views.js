@@ -214,8 +214,8 @@
       if(!coords||(loop&&i===lastIndex)) return;
       const selected=i===segmentIndex||(loop&&i===0&&segmentIndex===lastIndex);
       const endpoint=i===0||i===lastIndex;
-      const label=i===0?(loop?"Start / End":"Start"):i===lastIndex?"End":String(i);
-      const width=endpoint?(loop&&i===0?82:48):25;
+      const label=i===0?(loop?"Start / End":"Start"):i===lastIndex?"End":stopSymbol(trip,i,lastIndex)+" "+i;
+      const width=endpoint?(loop&&i===0?82:48):34;
       const marker=L.marker(coords,{icon:L.divIcon({className:"leaflet-div-icon",html:`<span class="npt-map-pin ${selected?"current":""}" style="width:${width}px;border-radius:${endpoint?12:50}${endpoint?"px":"%"}">${label}</span>`,iconSize:[width,25],iconAnchor:[width/2,12]}),
         zIndexOffset:endpoint?300:0,
         title:i===0?trip.startLocation:i===lastIndex?trip.endLocation:trip.segments[i-1].campground||trip.segments[i-1].location});
@@ -303,9 +303,6 @@
   function milesBetween(a,b) {
     return 69*Math.hypot(b[0]-a[0],(b[1]-a[1])*Math.cos((a[0]+b[0])*Math.PI/360));
   }
-  function driveBearing(a,b) {
-    return Math.atan2((b[1]-a[1])*Math.cos((a[0]+b[0])*Math.PI/360),b[0]-a[0])*180/Math.PI;
-  }
   const landmarkPhotos=new Map();
   function addLandmarkPhoto(state,title) {
     if(state.trip.privacy!=="public"||!state.trip.parks?.includes(title)||!/(National Park|National Monument|National Memorial)/i.test(title)) return;
@@ -328,76 +325,23 @@
       label.append(credit);caption.append(img,label);
     });
   }
-  let perspectiveLibrary;
-  function getPerspectiveLibrary(){
-    if(window.maplibregl) return Promise.resolve(window.maplibregl);
-    if(!perspectiveLibrary){
-      const base="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl";
-      document.head.append(el("link",undefined,{rel:"stylesheet",href:base+".css"}));
-      perspectiveLibrary=new Promise((resolve,reject)=>{
-        const script=el("script",undefined,{src:base+".js"});
-        script.onload=()=>resolve(window.maplibregl);
-        script.onerror=()=>reject(Error("Perspective map unavailable"));
-        document.head.append(script);
-      });
-    }
-    return perspectiveLibrary;
-  }
-  function sendPerspectiveCamera(preview){
-    if(!preview.camera||!preview.perspective) return;
-    const {location,zoom,bearing,pitch}=preview.camera;
-    const center=[location[1],location[0]];
-    preview.perspective.jumpTo({center,zoom:zoom-1,bearing,pitch});
-    preview.vehicle.setLngLat(center);
-  }
-  function addPerspective(state,preview){
-    const overlay=el("div",undefined,{"aria-label":"Tilted driving map",style:"position:absolute;inset:0;z-index:900;visibility:hidden"});
-    state.mapNode.append(overlay);
-    preview.overlay=overlay;
-    getPerspectiveLibrary().then(GL=>{
-      if(state.preview!==preview||!GL) return;
-      const [lat,lon]=preview.stops[0].point;
-      const view=new GL.Map({
-        container:overlay,center:[lon,lat],zoom:6,pitch:53,interactive:false,
-        style:{version:8,sources:{roads:{type:"raster",tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],tileSize:256,maxzoom:19,attribution:"© OpenStreetMap contributors"}},
-          layers:[{id:"basemap",type:"raster",source:"roads"}]}
-      });
-      preview.perspective=view;
-      const car=el("span","▲",{class:"npt-map-pin current","aria-hidden":"true"});
-      preview.vehicle=new GL.Marker({element:car}).setLngLat([lon,lat]).addTo(view);
-      view.once("load",()=>{
-        if(state.preview!==preview) return;
-        const features=preview.stops.slice(1).map((stop,i)=>{
-          const prev=preview.stops[i];
-          const road=stop.index===prev.index+1?state.roads?.[prev.index]:null;
-          return {type:"Feature",properties:{approximate:!road},geometry:{type:"LineString",coordinates:(road||[prev.point,stop.point]).map(([y,x])=>[x,y])}};
-        });
-        view.addSource("npt-route",{type:"geojson",data:{type:"FeatureCollection",features}});
-        view.addLayer({id:"route-road",type:"line",source:"npt-route",filter:["==",["get","approximate"],false],paint:{"line-color":"#176d54","line-width":4}});
-        view.addLayer({id:"route-approximate",type:"line",source:"npt-route",filter:["==",["get","approximate"],true],paint:{"line-color":"#176d54","line-width":3,"line-dasharray":[2,2]}});
-        const grouped=new Map();
-        preview.stops.forEach(stop=>{
-          const key=stop.point.join(",");
-          const existing=grouped.get(key)||[];
-          existing.push(stop);grouped.set(key,existing);
-        });
-        for(const stops of grouped.values()){
-          const first=stops[0];
-          const label=stops.map(stop=>stop.index===0?"Start":stop.index===state.route.length-1?"End":stop.index).join(" / ");
-          const pin=el("span",label,{class:"npt-map-pin",style:"width:max-content;min-width:25px;padding:0 5px;border-radius:12px",title:state.trip.segments[first.index-1]?.location||label});
-          new GL.Marker({element:pin,anchor:"bottom"}).setLngLat([first.point[1],first.point[0]]).addTo(view);
-        }
-        overlay.style.visibility="visible";
-        view.resize();
-        sendPerspectiveCamera(preview);
-      });
-    }).catch(()=>overlay.remove());
-  }
   function previewStopTitle(state,stop) {
     if(stop.index===0) return state.trip.startLocation||"Departure";
     if(stop.index===state.route.length-1) return state.trip.endLocation||"Return";
     const segment=state.trip.segments[stop.index-1];
     return segment?.campground||segment?.park||segment?.location||"Stop "+stop.index;
+  }
+  function stopSymbol(trip,index,lastIndex) {
+    if(index===0||index===lastIndex) return "⚑";
+    const segment=trip.segments[index-1];
+    if(segment?.campground) return "⛺";
+    return segment?.park&&!/travel day/i.test(segment.park)?"◆":"•";
+  }
+  function showPreviewStop(state,tooltip,stop) {
+    const label=el("span",stopSymbol(state.trip,stop.index,state.route.length-1)+" "+previewStopTitle(state,stop),
+      {style:"display:block;max-width:180px;white-space:normal;overflow-wrap:anywhere"});
+    tooltip.setLatLng(stop.point).setContent(label);
+    if(!state.map.hasLayer(tooltip)) tooltip.addTo(state.map);
   }
   function previewHighlights(state,stop) {
     const {trip,panel}=state;
@@ -405,7 +349,6 @@
     const days=segment?trip.days.filter(day=>String(day.segmentNumber)===String(segment.sequence)):[];
     const title=stop.index===0?trip.startLocation:segment?.park||segment?.location||trip.endLocation;
     const stopTitle=previewStopTitle(state,stop);
-    state.stopLabel.textContent=stopTitle;
     panel.replaceChildren(el("h3",stopTitle));
     if(title&&title!==stopTitle) panel.append(el("p",title));
     if(segment?.location&&segment.location!==title&&segment.location!==stopTitle) panel.append(el("p",segment.location));
@@ -425,12 +368,11 @@
     if(!preview) return;
     cancelAnimationFrame(preview.frame);
     preview.marker.remove();
-    preview.perspective?.remove();
-    preview.overlay?.remove();
+    preview.currentLabel.remove();
+    preview.nextLabel.remove();
     state.preview=null;
     state.pause.hidden=true;
     state.overview.hidden=true;
-    state.stopLabel.hidden=true;
   }
   function playPreview(state) {
     if(!state.map) return;
@@ -448,12 +390,11 @@
     state.pause.hidden=false;
     state.pause.textContent="Pause";
     state.overview.hidden=false;
-    state.stopLabel.hidden=false;
+    preview.currentLabel=L.tooltip({permanent:true,direction:"top",offset:[0,-13],opacity:1});
+    preview.nextLabel=L.tooltip({permanent:true,direction:"bottom",offset:[0,13],opacity:1});
+    showPreviewStop(state,preview.currentLabel,stops[0]);
     previewHighlights(state,stops[0]);
-    let lastBearing=driveBearing(stops[0].point,stops[1].point);
-    preview.camera={location:stops[0].point,zoom:9,bearing:lastBearing,pitch:reduced?0:53};
     map.setView(stops[0].point,9,{animate:false});
-    if(!reduced) addPerspective(state,preview);
     const tick=now=>{
       if(state.preview!==preview||preview.paused) return;
       const from=stops[preview.index], to=stops[preview.index+1];
@@ -461,8 +402,16 @@
         const road=to.index===from.index+1?state.roads?.[from.index]:null;
         preview.sample=previewLeg(road?[from.point,...road,to.point]:[from.point,to.point]);
         const miles=milesBetween(from.point,to.point);
-        preview.zoom=miles<12?10.5:miles<35?10:miles<100?8.5:7.5;
+        preview.zoom=miles<100?8.5:7.5;
+        preview.close=miles<35;
         preview.approaching=false;
+        preview.nextLabel.remove();
+        if(preview.close&&miles>0){
+          const center=from.point.map((value,k)=>(value+to.point[k])/2);
+          const fitZoom=map.getBoundsZoom(L.latLngBounds([from.point,to.point]),false,[110,110]);
+          map.setView(center,Math.min(14,fitZoom),{animate:false});
+          showPreviewStop(state,preview.nextLabel,to);
+        }
         preview.hold=preview.index===0?800:1250;
         preview.travel=road?1400:1100;
         preview.newLeg=false;
@@ -470,29 +419,25 @@
       if(preview.last!==null) preview.elapsed+=Math.max(0,now-preview.last)*state.speed;
       preview.last=now;
       const fraction=Math.min(1,Math.max(0,(preview.elapsed-preview.hold)/preview.travel));
-      if(fraction>0&&fraction<1&&!preview.approaching){
-        state.stopLabel.textContent="Next: "+previewStopTitle(state,to);
+      if(!preview.close&&fraction>=0.6&&fraction<1&&!preview.approaching){
+        showPreviewStop(state,preview.nextLabel,to);
         preview.approaching=true;
       }
       if(fraction>0&&(!reduced||fraction===1)){
         const location=preview.sample(fraction);
         preview.marker.setLatLng(location);
         if(fraction===1||now-(preview.lastPan||0)>75){
-          const proximity=Math.max(0,(fraction-0.65)/0.35);
-          const approach=proximity*proximity*(3-2*proximity);
-          const zoom=preview.zoom+(Math.max(9.5,preview.zoom)-preview.zoom)*approach;
-          const ahead=preview.sample(Math.min(1,fraction+0.12));
-          if(milesBetween(location,ahead)>0.07){
-            const next=driveBearing(location,ahead);
-            lastBearing+=((((next-lastBearing)%360)+540)%360-180)*0.32;
+          if(!preview.close){
+            const proximity=Math.max(0,(fraction-0.65)/0.35);
+            const approach=proximity*proximity*(3-2*proximity);
+            map.setView(location,preview.zoom+(9.5-preview.zoom)*approach,{animate:false});
           }
-          preview.camera={location,zoom,bearing:lastBearing,pitch:reduced?0:53};
-          if(preview.perspective&&preview.overlay.style.visibility==="visible") sendPerspectiveCamera(preview);
-          else map.setView(location,zoom,{animate:false});
           preview.lastPan=now;
         }
       }
       if(fraction===1){
+        preview.nextLabel.remove();
+        showPreviewStop(state,preview.currentLabel,to);
         previewHighlights(state,to);
         preview.index++;
         if(preview.index===stops.length-1){
@@ -567,11 +512,10 @@
     pause.hidden=true;
     overview.hidden=true;
     const speed=el("select",undefined,{"aria-label":"Preview speed"});
-    speed.append(el("option","Normal speed",{value:"1"}),el("option","2× speed",{value:"2"}),el("option","4× speed",{value:"4"}));
+    speed.append(el("option","0.5× speed",{value:"0.5"}),el("option","Normal speed",{value:"1"}),el("option","2× speed",{value:"2"}),el("option","4× speed",{value:"4"}));
+    speed.value="1";
     speed.onchange=()=>{state.speed=Number(speed.value);};
-    const stopLabel=el("div",undefined,{role:"status",style:"position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:950;max-width:75%;width:max-content;padding:6px 12px;border-radius:10px;background:#18382f;color:white;font-weight:700;text-align:center;pointer-events:none"});
-    stopLabel.hidden=true;
-    const state={root,trip,key,panel,mapNode,stopLabel,pause,overview,speed:1,dayIndex:null,abort:new AbortController(),
+    const state={root,trip,key,panel,pause,overview,speed:1,dayIndex:null,abort:new AbortController(),
       route:[point(trip.preferences?.mapStart),...trip.segments.map(s=>point(s.mapPoint)),point(trip.preferences?.mapEnd)],
       select(index){
         stopPreview(state);
@@ -585,7 +529,8 @@
     select.onchange=()=>state.select(select.value===""?null:Number(select.value));
     nav.append(button("Back to trips",()=>window.showHome()),fullTrip,pause,overview,speed,prev,next,select,roads);
     layout.append(mapNode,panel);
-    root.append(title,nav,layout,key);
+    const legend=el("p","⛺ Campground   ◆ Attraction or park   • Route stop   ⚑ Trip endpoint",{class:"npt-map-key"});
+    root.append(title,nav,layout,legend,key);
     document.getElementById("viewer").after(root);
     window.scrollTo(0,0);
     state.select(null);
@@ -594,7 +539,6 @@
       if(active!==state) return;
       state.L=L;
       state.map=L.map(mapNode,{scrollWheelZoom:false}).setView([43,-104],4);
-      mapNode.append(stopLabel);
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(state.map);
       drawWalk(state);
       fullTrip.disabled=state.route.filter(Boolean).length<2;
