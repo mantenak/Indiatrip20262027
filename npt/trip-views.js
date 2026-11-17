@@ -369,7 +369,15 @@
     const photoEntries=[];
     for(const entry of entries){
       if(entry.type==="Campground"){
-        if(entry.name==="Madison Campground"&&entry.park==="Yellowstone National Park"){
+        if(entry.name==="Mitchell KOA Journey"&&/Mitchell/i.test(entry.location||"")){
+          appendStopPhoto(entry,"https://koa.com/content/campgrounds/mitchell/photos/41112photos10fd73bd-f6dc-4e1d-ac15-052f6379f287.jpeg.axd?preset=campgroundphoto",
+            "Water and electric RV sites at Mitchell KOA Journey","Example RV sites",
+            "https://koa.com/campgrounds/mitchell/photos/","Mitchell KOA Journey");
+        } else if(entry.name==="Cedar Pass Campground"&&entry.park==="Badlands National Park"){
+          appendStopPhoto(entry,"https://cdn.recreation.gov/public/2024/11/22/21/43/10288228_613a142b-e989-433d-9279-561377d4e2e7_700.webp",
+            "Cedar Pass Campground in Badlands National Park","Campground photo",
+            "https://www.recreation.gov/camping/campgrounds/10288228","Recreation.gov");
+        } else if(entry.name==="Madison Campground"&&entry.park==="Yellowstone National Park"){
           appendStopPhoto(entry,"https://www.nps.gov/yell/planyourvisit/images/madison_4.jpg","Example campsite at Madison Campground",
             "Example campsite","https://www.nps.gov/yell/planyourvisit/madisoncg.htm","National Park Service / Diane Renkin");
         }
@@ -444,6 +452,10 @@
     const facts=el("dl",undefined,{class:"npt-stay-fields",style:"grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:7px 0"});
     detailedStopFacts(state.trip,segment,days,campground).forEach(([label,value])=>dataRow(facts,label,value));
     if(facts.childElementCount) content.append(facts);
+    const photoHost=el("details");
+    photoHost.hidden=true;
+    photoHost.append(el("summary","Stop photo"));
+    content.append(photoHost);
     const notes=officialStopNotes[segment?.park+"|"+segment?.campground];
     if(notes){
       const row=el("p",notes.text+" ",{style:"margin:6px 0"});
@@ -457,10 +469,6 @@
     const url=campground&&bookingLink(campground);
     if(url) content.append(el("a","Booking information",{href:url,target:"_blank",rel:"noopener noreferrer"}));
     if(attractions.length) content.append(el("p","Planned nearby: "+attractions.slice(0,2).join(" · "),{style:"margin:6px 0"}));
-    const photoHost=el("details");
-    photoHost.hidden=true;
-    photoHost.append(el("summary","Stop photo"));
-    content.append(photoHost);
     state.preview.currentLabel.remove();
     state.preview.mapCard=state.L.popup({offset:[0,-13],maxWidth:275,maxHeight:Math.floor(state.map.getSize().y*0.64),autoPanPadding:[12,12],closeOnClick:false})
       .setLatLng(stop.point).setContent(content).openOn(state.map);
@@ -477,8 +485,9 @@
       image.onload=()=>{
         if(!photoHost.isConnected||priority>=rank) return;
         rank=priority;
-        photoHost.replaceChildren(el("summary","Stop photo"),figure);
+        photoHost.replaceChildren(el("summary",entry.type==="Campground"?"Campground photo":"Stop photo"),figure);
         photoHost.hidden=false;
+        if(entry.type==="Campground") photoHost.open=true;
         state.preview?.mapCard?.update();
       };
     };
@@ -494,7 +503,7 @@
       const section=el("section",undefined,{class:"dayitem"});
       section.append(el("h4",name),el("p",type),mapsLink("View on map",name,location));
       panel.append(section);
-      entries.push({card:section,name,type,park:segment?.park});
+      entries.push({card:section,name,type,location,park:segment?.park});
       return section;
     }
     const campground=findDetailedCampground(trip,segment);
@@ -544,6 +553,7 @@
     const preview=state.preview;
     if(!preview) return;
     cancelAnimationFrame(preview.frame);
+    clearTimeout(preview.dwellTimer);
     state.map.stop();
     preview.marker.remove();
     preview.currentLabel.remove();
@@ -552,6 +562,8 @@
     state.preview=null;
     state.pause.hidden=true;
     state.overview.hidden=true;
+    state.continueStop.hidden=true;
+    state.dwellStatus.textContent="";
     state.jump.value="";
   }
   function fitPreviewLeg(map,L,points,reduced,speed) {
@@ -581,8 +593,9 @@
         zIndexOffset:1500,interactive:false
       }).addTo(map)};
     state.preview=preview;
-    state.pause.hidden=false;
-    state.pause.textContent=preview.done?"Replay":atStop?"Continue":"Pause";
+    state.pause.hidden=atStop&&!preview.done;
+    state.pause.textContent=preview.done?"Replay":"Pause";
+    state.continueStop.hidden=!atStop||preview.done;
     state.overview.hidden=false;
     preview.currentLabel=L.tooltip({permanent:true,direction:"top",offset:[0,-13],opacity:1});
     preview.nextLabel=L.tooltip({permanent:true,direction:"bottom",offset:[0,13],opacity:1});
@@ -590,6 +603,31 @@
     if(atStop) map.setView(start.point,Math.min(12,Math.max(9,map.getZoom())),{animate:false});
     previewHighlights(state,start,atStop);
     state.jump.value=String(start.index);
+    const advance=()=>{
+      if(state.preview!==preview||preview.done||!preview.paused) return;
+      clearTimeout(preview.dwellTimer);
+      preview.dwellTimer=null;
+      state.dwellStatus.textContent="";
+      state.continueStop.hidden=true;
+      state.pause.hidden=false;
+      state.pause.textContent="Pause";
+      if(preview.atStop){
+        preview.mapCard?.remove();
+        preview.mapCard=null;
+        showPreviewStop(state,preview.currentLabel,stops[preview.index]);
+        preview.atStop=false;
+      }
+      preview.paused=false;
+      if(preview.points&&!preview.newLeg) fitPreviewLeg(map,L,preview.points,reduced,state.speed);
+      preview.last=null;
+      preview.frame=requestAnimationFrame(tick);
+    };
+    function scheduleDeparture(){
+      state.pause.textContent="Pause";
+      state.continueStop.hidden=false;
+      state.dwellStatus.textContent="Next stop in 8 seconds.";
+      preview.dwellTimer=setTimeout(advance,8000);
+    }
     const tick=now=>{
       if(state.preview!==preview||preview.paused) return;
       const from=stops[preview.index], to=stops[preview.index+1];
@@ -624,30 +662,31 @@
         if(state.mode==="details"){
           preview.paused=true;
           preview.atStop=true;
-          state.pause.textContent="Continue";
+          scheduleDeparture();
           return;
         }
       }
       preview.frame=requestAnimationFrame(tick);
     };
+    preview.advance=advance;
     preview.toggle=()=>{
       if(preview.done){playPreview(state);return;}
-      preview.paused=!preview.paused;
-      state.pause.textContent=preview.paused?(preview.atStop?"Continue":"Resume"):"Pause";
-      if(preview.paused){
-        cancelAnimationFrame(preview.frame);
-        map.stop();
-      } else {
-        if(preview.atStop){
-          preview.mapCard?.remove();
-          preview.mapCard=null;
-          showPreviewStop(state,preview.currentLabel,stops[preview.index]);
-          preview.atStop=false;
-        }
-        if(preview.points&&!preview.newLeg) fitPreviewLeg(map,L,preview.points,reduced,state.speed);
-        preview.last=null;
-        preview.frame=requestAnimationFrame(tick);
+      if(preview.dwellTimer!=null){
+        clearTimeout(preview.dwellTimer);
+        preview.dwellTimer=null;
+        state.pause.textContent="Resume";
+        state.dwellStatus.textContent="Automatic advance paused.";
+        return;
       }
+      if(preview.paused){
+        if(preview.atStop) scheduleDeparture();
+        else advance();
+        return;
+      }
+      preview.paused=true;
+      state.pause.textContent="Resume";
+      cancelAnimationFrame(preview.frame);
+      map.stop();
     };
     if(!preview.paused&&!preview.done) preview.frame=requestAnimationFrame(tick);
   }
@@ -706,6 +745,9 @@
     const fullTrip=button("Play Preview",()=>playPreview(state));
     fullTrip.disabled=true;
     const pause=button("Pause",()=>state.preview?.toggle());
+    const continueStop=button("Continue",()=>state.preview?.advance());
+    continueStop.hidden=true;
+    const dwellStatus=el("span",undefined,{role:"status"});
     const overview=button("Map overview",()=>state.select(null));
     pause.hidden=true;
     overview.hidden=true;
@@ -713,7 +755,7 @@
     speed.append(el("option","0.5× speed",{value:"0.5"}),el("option","Normal speed",{value:"1"}),el("option","2× speed",{value:"2"}),el("option","4× speed",{value:"4"}));
     speed.value="1";
     speed.onchange=()=>{state.speed=Number(speed.value);};
-    const state={root,trip,key,panel,pause,overview,jump,mode:"overview",speed:1,dayIndex:null,abort:new AbortController(),
+    const state={root,trip,key,panel,pause,overview,jump,continueStop,dwellStatus,mode:"overview",speed:1,dayIndex:null,abort:new AbortController(),
       route:[point(trip.preferences?.mapStart),...trip.segments.map(s=>point(s.mapPoint)),point(trip.preferences?.mapEnd)],
       select(index){
         stopPreview(state);
@@ -734,7 +776,7 @@
     };
     jump.onchange=()=>{if(jump.value!=="") playPreview(state,Number(jump.value));};
     select.onchange=()=>state.select(select.value===""?null:Number(select.value));
-    nav.append(button("Back to trips",()=>window.showHome()),mode,fullTrip,pause,overview,jump,speed,prev,next,select,roads);
+    nav.append(button("Back to trips",()=>window.showHome()),mode,fullTrip,pause,continueStop,overview,jump,speed,prev,next,select,roads,dwellStatus);
     layout.append(mapNode,panel);
     const legend=el("p","⛺ Campground   ◆ Attraction or park   • Route stop   ⚑ Trip endpoint",{class:"npt-map-key"});
     root.append(title,nav,layout,legend,key);
