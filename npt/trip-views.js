@@ -240,7 +240,13 @@
     panel.replaceChildren();
     if(full){
       panel.append(el("h3","Entire itinerary"),el("p",`${trip.days.length} days · ${trip.segments.length} stops`));
-      getStays(trip).forEach(stay=>panel.append(button(`Day ${stay.first+1} · ${stay.name}`,()=>state.select(stay.first))));
+      const dayList=el("div",undefined,{style:"display:grid;gap:6px"});
+      getStays(trip).forEach(stay=>{
+        const day=button(`Day ${stay.first+1} · ${stay.name}`,()=>state.select(stay.first));
+        day.style.textAlign="left";
+        dayList.append(day);
+      });
+      panel.append(dayList);
       return;
     }
     panel.append(el("h3",`Day ${day.dayNumber||dayIndex+1} · ${day.park||day.location||"Travel"}`));
@@ -294,6 +300,99 @@
       return points[i-1].map((value,k)=>value+(points[i][k]-value)*share);
     };
   }
+  function milesBetween(a,b) {
+    return 69*Math.hypot(b[0]-a[0],(b[1]-a[1])*Math.cos((a[0]+b[0])*Math.PI/360));
+  }
+  function driveBearing(a,b) {
+    return Math.atan2((b[1]-a[1])*Math.cos((a[0]+b[0])*Math.PI/360),b[0]-a[0])*180/Math.PI;
+  }
+  const landmarkPhotos=new Map();
+  function addLandmarkPhoto(state,title) {
+    if(state.trip.privacy!=="public"||!state.trip.parks?.includes(title)||!/(National Park|National Monument|National Memorial)/i.test(title)) return;
+    const caption=el("figure",undefined,{style:"margin:12px 0"});
+    state.panel.append(caption);
+    if(!landmarkPhotos.has(title)){
+      const query=new URLSearchParams({action:"query",prop:"pageimages",piprop:"thumbnail|name",pithumbsize:"480",titles:title,redirects:"1",format:"json",formatversion:"2",origin:"*"});
+      landmarkPhotos.set(title,fetch("https://en.wikipedia.org/w/api.php?"+query)
+        .then(response=>response.ok?response.json():null)
+        .then(result=>result?.query?.pages?.[0]||null).catch(()=>null));
+    }
+    landmarkPhotos.get(title).then(page=>{
+      if(!caption.isConnected||!page?.thumbnail?.source||!page.pageimage) return;
+      const source=new URL(page.thumbnail.source);
+      if(source.protocol!=="https:"||source.hostname!=="upload.wikimedia.org") return;
+      const img=el("img",undefined,{src:source.href,alt:title,style:"display:block;width:100%;max-height:210px;object-fit:cover;border-radius:9px"});
+      img.onerror=()=>caption.remove();
+      const credit=el("a","Photo and credit",{href:"https://commons.wikimedia.org/wiki/File:"+encodeURIComponent(page.pageimage),target:"_blank",rel:"noopener noreferrer"});
+      const label=el("figcaption","Landmark photo · ");
+      label.append(credit);caption.append(img,label);
+    });
+  }
+  let perspectiveLibrary;
+  function getPerspectiveLibrary(){
+    if(window.maplibregl) return Promise.resolve(window.maplibregl);
+    if(!perspectiveLibrary){
+      const base="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl";
+      document.head.append(el("link",undefined,{rel:"stylesheet",href:base+".css"}));
+      perspectiveLibrary=new Promise((resolve,reject)=>{
+        const script=el("script",undefined,{src:base+".js"});
+        script.onload=()=>resolve(window.maplibregl);
+        script.onerror=()=>reject(Error("Perspective map unavailable"));
+        document.head.append(script);
+      });
+    }
+    return perspectiveLibrary;
+  }
+  function sendPerspectiveCamera(preview){
+    if(!preview.camera||!preview.perspective) return;
+    const {location,zoom,bearing,pitch}=preview.camera;
+    const center=[location[1],location[0]];
+    preview.perspective.jumpTo({center,zoom:zoom-1,bearing,pitch});
+    preview.vehicle.setLngLat(center);
+  }
+  function addPerspective(state,preview){
+    const overlay=el("div",undefined,{"aria-label":"Tilted driving map",style:"position:absolute;inset:0;z-index:900;visibility:hidden"});
+    state.mapNode.append(overlay);
+    preview.overlay=overlay;
+    getPerspectiveLibrary().then(GL=>{
+      if(state.preview!==preview||!GL) return;
+      const [lat,lon]=preview.stops[0].point;
+      const view=new GL.Map({
+        container:overlay,center:[lon,lat],zoom:6,pitch:53,interactive:false,
+        style:{version:8,sources:{roads:{type:"raster",tiles:["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],tileSize:256,maxzoom:19,attribution:"© OpenStreetMap contributors"}},
+          layers:[{id:"basemap",type:"raster",source:"roads"}]}
+      });
+      preview.perspective=view;
+      const car=el("span","▲",{class:"npt-map-pin current","aria-hidden":"true"});
+      preview.vehicle=new GL.Marker({element:car}).setLngLat([lon,lat]).addTo(view);
+      view.once("load",()=>{
+        if(state.preview!==preview) return;
+        const features=preview.stops.slice(1).map((stop,i)=>{
+          const prev=preview.stops[i];
+          const road=stop.index===prev.index+1?state.roads?.[prev.index]:null;
+          return {type:"Feature",properties:{approximate:!road},geometry:{type:"LineString",coordinates:(road||[prev.point,stop.point]).map(([y,x])=>[x,y])}};
+        });
+        view.addSource("npt-route",{type:"geojson",data:{type:"FeatureCollection",features}});
+        view.addLayer({id:"route-road",type:"line",source:"npt-route",filter:["==",["get","approximate"],false],paint:{"line-color":"#176d54","line-width":4}});
+        view.addLayer({id:"route-approximate",type:"line",source:"npt-route",filter:["==",["get","approximate"],true],paint:{"line-color":"#176d54","line-width":3,"line-dasharray":[2,2]}});
+        const grouped=new Map();
+        preview.stops.forEach(stop=>{
+          const key=stop.point.join(",");
+          const existing=grouped.get(key)||[];
+          existing.push(stop);grouped.set(key,existing);
+        });
+        for(const stops of grouped.values()){
+          const first=stops[0];
+          const label=stops.map(stop=>stop.index===0?"Start":stop.index===state.route.length-1?"End":stop.index).join(" / ");
+          const pin=el("span",label,{class:"npt-map-pin",style:"width:max-content;min-width:25px;padding:0 5px;border-radius:12px",title:state.trip.segments[first.index-1]?.location||label});
+          new GL.Marker({element:pin,anchor:"bottom"}).setLngLat([first.point[1],first.point[0]]).addTo(view);
+        }
+        overlay.style.visibility="visible";
+        view.resize();
+        sendPerspectiveCamera(preview);
+      });
+    }).catch(()=>overlay.remove());
+  }
   function previewHighlights(state,stop) {
     const {trip,panel}=state;
     const segment=trip.segments[stop.index-1];
@@ -302,6 +401,7 @@
     panel.replaceChildren(el("h3",title||"Trip stop"));
     if(segment?.location&&segment.location!==title) panel.append(el("p",segment.location));
     if(segment?.campground) panel.append(el("p",segment.campground+(segment.nights?" · "+segment.nights+" nights":"")));
+    addLandmarkPhoto(state,title);
     const attractions=[...new Set(days.flatMap(day=>(day.activities||[]).map(a=>typeof a==="string"?a:a?.name)).filter(name=>
       name&&!/fuel|check propane|campground setup|laundry|groceries|dump station|drive and|planning|travel day|set up camp/i.test(name)))];
     if(attractions.length){
@@ -316,6 +416,8 @@
     if(!preview) return;
     cancelAnimationFrame(preview.frame);
     preview.marker.remove();
+    preview.perspective?.remove();
+    preview.overlay?.remove();
     state.preview=null;
     state.pause.hidden=true;
     state.overview.hidden=true;
@@ -327,7 +429,7 @@
     if(stops.length<2) return;
     const {L,map}=state;
     const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const preview={stops,index:0,elapsed:0,last:null,frame:0,paused:false,speed:state.speed,
+    const preview={stops,index:0,elapsed:0,last:null,frame:0,paused:false,
       newLeg:true,marker:L.marker(stops[0].point,{
         icon:L.divIcon({className:"leaflet-div-icon",html:'<span class="npt-map-pin current" aria-hidden="true">➤</span>',iconSize:[25,25],iconAnchor:[12,12]}),
         zIndexOffset:1500,interactive:false
@@ -337,16 +439,20 @@
     state.pause.textContent="Pause";
     state.overview.hidden=false;
     previewHighlights(state,stops[0]);
-    const zoom=Math.min(7,Math.max(5,map.getZoom()+1));
-    map.setView(stops[0].point,zoom,{animate:false});
+    let lastBearing=driveBearing(stops[0].point,stops[1].point);
+    preview.camera={location:stops[0].point,zoom:10,bearing:lastBearing,pitch:reduced?0:53};
+    map.setView(stops[0].point,10,{animate:false});
+    if(!reduced) addPerspective(state,preview);
     const tick=now=>{
       if(state.preview!==preview||preview.paused) return;
       const from=stops[preview.index], to=stops[preview.index+1];
       if(preview.newLeg){
         const road=to.index===from.index+1?state.roads?.[from.index]:null;
         preview.sample=previewLeg(road?[from.point,...road,to.point]:[from.point,to.point]);
-        preview.hold=preview.index===0?650:600;
-        preview.travel=road?1000:820;
+        const miles=milesBetween(from.point,to.point);
+        preview.zoom=miles<12?13:miles<35?11.5:miles<100?9.5:8;
+        preview.hold=preview.index===0?800:1250;
+        preview.travel=road?1400:1100;
         preview.newLeg=false;
       }
       if(preview.last!==null) preview.elapsed+=Math.max(0,now-preview.last)*state.speed;
@@ -356,7 +462,17 @@
         const location=preview.sample(fraction);
         preview.marker.setLatLng(location);
         if(fraction===1||now-(preview.lastPan||0)>75){
-          map.panTo(location,{animate:false});
+          const proximity=Math.max(0,(fraction-0.65)/0.35);
+          const approach=proximity*proximity*(3-2*proximity);
+          const zoom=preview.zoom+(Math.max(11,preview.zoom)-preview.zoom)*approach;
+          const ahead=preview.sample(Math.min(1,fraction+0.12));
+          if(milesBetween(location,ahead)>0.07){
+            const next=driveBearing(location,ahead);
+            lastBearing+=((((next-lastBearing)%360)+540)%360-180)*0.32;
+          }
+          preview.camera={location,zoom,bearing:lastBearing,pitch:reduced?0:53};
+          if(preview.perspective&&preview.overlay.style.visibility==="visible") sendPerspectiveCamera(preview);
+          else map.setView(location,zoom,{animate:false});
           preview.lastPan=now;
         }
       }
@@ -410,7 +526,7 @@
     active.root.remove();
     active=null;
   };
-  window.openNptWalk=async trip=>{
+  window.openNptWalk=async (trip,{autoplay=false}={})=>{
     window.closeNptWalk();
     document.getElementById("home").style.display="none";
     document.getElementById("viewer").classList.remove("open");
@@ -428,7 +544,7 @@
     trip.days.forEach((day,i)=>select.append(el("option",`Day ${day.dayNumber||i+1} · ${day.park||day.location||"Travel"}`,{value:String(i)})));
     const roads=button("Load road route",()=>loadRoads(state,roads));
     roads.hidden=true;
-    const fullTrip=button("Show Full Trip",()=>playPreview(state));
+    const fullTrip=button("Preview Drive",()=>playPreview(state));
     fullTrip.disabled=true;
     const pause=button("Pause",()=>state.preview?.toggle());
     const overview=button("Map overview",()=>state.select(null));
@@ -437,7 +553,7 @@
     const speed=el("select",undefined,{"aria-label":"Preview speed"});
     speed.append(el("option","Normal speed",{value:"1"}),el("option","2× speed",{value:"2"}),el("option","4× speed",{value:"4"}));
     speed.onchange=()=>{state.speed=Number(speed.value);};
-    const state={root,trip,key,panel,pause,overview,speed:1,dayIndex:null,abort:new AbortController(),
+    const state={root,trip,key,panel,mapNode,pause,overview,speed:1,dayIndex:null,abort:new AbortController(),
       route:[point(trip.preferences?.mapStart),...trip.segments.map(s=>point(s.mapPoint)),point(trip.preferences?.mapEnd)],
       select(index){
         stopPreview(state);
@@ -465,6 +581,7 @@
       fullTrip.disabled=state.route.filter(Boolean).length<2;
       roads.hidden=trip.privacy!=="public"||state.route.some(p=>!p);
       if(state.route.some(p=>!p)) key.textContent="Some route stops do not have map coordinates.";
+      if(autoplay&&!fullTrip.disabled) playPreview(state);
     } catch(error){
       key.textContent="The interactive map could not load.";
       const items=el("ol");

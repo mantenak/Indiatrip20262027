@@ -197,7 +197,7 @@
     if(!publicTrips.length){target.innerHTML='<div class="empty">No public trips yet. Published trips will appear here.</div>';return;}
     for(const t of publicTrips){
       const c=document.createElement("div");c.className="tripcard";
-      c.innerHTML='<h4>'+clean(t.name)+'</h4><p>'+clean(t.startLocation)+' → '+clean(t.endLocation)+'</p><p>'+t.length+' days · '+t.parks.length+' parks</p><div class="tripactions"><button class="btn" data-details>Details</button><button class="btn primary" data-walk>Walk Me Through It</button><button class="btn" data-copy>Copy Trip</button></div>';
+      c.innerHTML='<h4>'+clean(t.name)+'</h4><p>'+clean(t.startLocation)+' → '+clean(t.endLocation)+'</p><p>'+t.length+' days · '+t.parks.length+' parks</p><div class="tripactions"><button class="btn" data-details>Details</button><button class="btn primary" data-walk>Preview Drive</button><button class="btn" data-copy>Copy Trip</button></div>';
       c.querySelector("[data-details]").onclick=()=>window.showTrip(t,false);
       const walk=c.querySelector("[data-walk]");
       walk.hidden=!t.days.length;
@@ -279,7 +279,7 @@
   };
   function openPublicMap(trip) {
     history.replaceState(null,"",location.pathname+location.search+"#public="+encodeURIComponent(trip.id)+"&view=map");
-    window.openNptWalk(trip);
+    window.openNptWalk(trip,{autoplay:true});
   }
   window.showTrip = function(t,isOwner) {
     window.closeNptWalk?.();
@@ -294,7 +294,7 @@
       const button=document.createElement("button");
       button.id="nptTripMapButton";
       button.className="btn primary";
-      button.textContent=t.privacy==="public"?"Walk Me Through It":"Open public trip map";
+      button.textContent=t.privacy==="public"?"Preview Drive":"Preview public drive";
       button.onclick=()=>openPublicMap(publicMap);
       $("#viewer .viewerbar").append(button);
     }
