@@ -194,7 +194,7 @@
       c.querySelector("[data-details]").onclick=()=>window.showTrip(t,false);
       const walk=c.querySelector("[data-walk]");
       walk.hidden=!t.days.length;
-      walk.onclick=()=>window.openNptWalk(t);
+      walk.onclick=()=>openPublicMap(t);
       const copy=c.querySelector("[data-copy]");
       copy.hidden=!t.allowCopy;
       copy.onclick=()=>window.copySharedTrip(t);
@@ -270,11 +270,27 @@
     if(error)return alert("Could not delete trip: "+error.message);
     await refreshMine();await refreshPublic();oldShowHome();
   };
+  function openPublicMap(trip) {
+    history.replaceState(null,"",location.pathname+location.search+"#public="+encodeURIComponent(trip.id)+"&view=map");
+    window.openNptWalk(trip);
+  }
   window.showTrip = function(t,isOwner) {
     window.closeNptWalk?.();
     lastViewed=t;
     window.nptCanEdit=()=>Boolean(isOwner&&user&&lastViewed===t);
     oldShowTrip(t,isOwner);
+    $("#nptTripMapButton")?.remove();
+    const publicMap=t.privacy==="public"?t:isOwner?publicTrips.find(trip=>
+      t.name.replace(/ — restored draft$/,"")===trip.name&&t.length===trip.length
+    ):null;
+    if(publicMap?.days.length){
+      const button=document.createElement("button");
+      button.id="nptTripMapButton";
+      button.className="btn primary";
+      button.textContent=t.privacy==="public"?"Walk Me Through It":"Open public trip map";
+      button.onclick=()=>openPublicMap(publicMap);
+      $("#viewer .viewerbar").append(button);
+    }
     if(!isOwner){
       $("#copyTripBtn").style.display=t.allowCopy===false?"none":"inline-block";
       $("#copyTripBtn").onclick=()=>window.copySharedTrip(t);
@@ -437,11 +453,14 @@
   async function viewHash() {
     const hash=location.hash;
     if(hash.startsWith("#public=")){
-      const id=hash.slice(8);
+      const options=new URLSearchParams(hash.slice(1));
+      const id=options.get("public")||"";
       if(!/^[a-f0-9-]{36}$/i.test(id))return;
       const {data,error}=await db.from("npt_trips").select("*").eq("id",id).eq("visibility","public").maybeSingle();
       if(error||!data)return alert("This public trip is unavailable or has been made private.");
-      window.showTrip(tripFromRow(data),false);
+      const trip=tripFromRow(data);
+      if(options.get("view")==="map"&&trip.days.length)openPublicMap(trip);
+      else window.showTrip(trip,false);
     }else if(hash.startsWith("#unlisted=")){
       const token=hash.slice(10);
       if(!/^[a-f0-9-]{36}$/i.test(token))return;
