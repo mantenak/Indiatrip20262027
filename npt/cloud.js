@@ -102,20 +102,27 @@
         <div class="controls"><button class="btn" type="button" id="nptCancelAuth">Cancel</button><button class="btn primary" id="nptSendLink" type="submit">Email me a sign-in link</button></div>
       </form><div class="feedback" id="nptAuthFeedback" aria-live="polite"></div>
       </div></div>`);
+    const accountButton=document.createElement("button");
+    accountButton.type="button";
+    accountButton.className="topbtn";
+    accountButton.id="nptAccountBtn";
+    accountButton.textContent="Sign In";
+    $(".topactions").append(accountButton);
     $("#nptMyTrips").onclick=()=>gated("mine");
     $("#nptNewTrip").onclick=()=>gated("new");
     $(".npt-brand").onclick=()=>{window.closeNptWalk?.();homeMode("public");};
     const home = $("#home");
-    home.insertAdjacentHTML("beforeend", `<div class="accountbar"><span id="cloudStatus">Loading NPT...</span><button class="btn" id="nptSignOut" hidden>Sign out</button></div>
+    home.insertAdjacentHTML("beforeend", `<div class="accountbar"><span id="cloudStatus">Loading NPT...</span></div>
     <div class="section" id="publicSection"><div class="sectionhead"><div><h3>Explore Public Trips</h3><p>Anyone can view these trips without signing in</p></div><button class="btn" id="refreshPublicTrips">Refresh</button></div><div id="nptPublicList" class="publiclist"><div class="empty">Checking for public trips...</div></div></div>`);
     $("#myTrips").hidden=true;
     $("#nptCancelAuth").onclick = ()=>{remember(null);hideAuth();};
     $("#nptAuth").addEventListener("click", e => { if(e.target.id === "nptAuth") hideAuth(); });
     $("#nptSignInForm").addEventListener("submit", requestLogin);
-    $("#nptSignOut").onclick = async () => {
+    accountButton.onclick = async () => {
+      if(!user){remember(null);showAuth();return;}
       if(!confirm("Sign out from your NPT account on this device?")) return;
       const {error} = await db.auth.signOut();
-      if(error) displayError(error); else {user=null;mine=[];updateUI();oldShowHome();}
+      if(error) displayError(error); else {user=null;mine=[];updateUI();window.showHome();}
     };
     $("#refreshPublicTrips").onclick = refreshPublic;
     // The original browser-backup import button is now gated behind sign-in.
@@ -170,7 +177,7 @@
   }
   function updateUI() {
     if(!user && tripHome==="mine") homeMode("public");
-    $("#nptSignOut").hidden=!user;
+    $("#nptAccountBtn").textContent=user?"Sign Out":"Sign In";
     message(user ? "Signed in as "+(user.email||"NPT user")+" · your trips are saved privately in the cloud" : "Browsing as a guest · sign in when you're ready to create a trip");
     window.renderTrips();
   }
