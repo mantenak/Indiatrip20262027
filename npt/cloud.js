@@ -11,7 +11,34 @@
   const oldStartWizard = window.startWizard;
   const oldShowTrip = window.showTrip;
   const oldShowHome = window.showHome;
-  const oldCopy = window.copySharedTrip;
+  let tripHome = "public";
+  let pending = null;
+  function remember(action) {
+    pending=action;
+    try { if(action) sessionStorage.setItem("npt-next-action",JSON.stringify(action)); else sessionStorage.removeItem("npt-next-action"); } catch {}
+  }
+  try { pending=JSON.parse(sessionStorage.getItem("npt-next-action")); } catch {}
+  function homeMode(mode) {
+    tripHome=mode;
+    $("#myTrips").hidden=mode!=="mine";
+    $("#publicSection").hidden=mode!=="public";
+    oldShowHome();
+  }
+  window.showHome=()=>{window.closeNptWalk?.(); if($("#publicSection"))homeMode(tripHome);else oldShowHome();};
+  function gated(type,id) {
+    if(!user){remember({type,id});showAuth();return;}
+    if(type==="mine"){window.closeNptWalk?.();homeMode("mine");}
+    if(type==="new") window.startWizard();
+  }
+  async function resumeAction(){
+    if(!user||!pending) return;
+    const action=pending;
+    remember(null);
+    if(action.type!=="copy"){gated(action.type);return;}
+    const {data,error}=await db.from("npt_trips").select("*").eq("id",action.id).eq("visibility","public").maybeSingle();
+    if(error||!data){message("This trip is no longer available to copy.");return;}
+    await window.copySharedTrip(tripFromRow(data));
+  }
   function message(s) { const el = $("#cloudStatus"); if(el) el.textContent = s || ""; }
   function displayError(e) { message(e && e.message ? e.message : String(e)); }
   const currentRoot = () => location.origin + location.pathname;
@@ -33,7 +60,7 @@
   function payload(t, visibility) {
     return {
       name: t.name,
-      start_date: t.startDate,
+      start_date: t.startDate || null,
       length_days: Math.min(366, Math.max(1, Number(t.length) || 1)),
       start_location: t.startLocation || "",
       end_location: t.endLocation || t.startLocation || "",
@@ -75,13 +102,14 @@
         <div class="controls"><button class="btn" type="button" id="nptCancelAuth">Cancel</button><button class="btn primary" id="nptSendLink" type="submit">Email me a sign-in link</button></div>
       </form><div class="feedback" id="nptAuthFeedback" aria-live="polite"></div>
       </div></div>`);
-    const toolbar = $(".topactions");
-    toolbar.insertAdjacentHTML("afterbegin", '<button class="topbtn" id="nptAccountBtn">Sign in</button>');
+    $("#nptMyTrips").onclick=()=>gated("mine");
+    $("#nptNewTrip").onclick=()=>gated("new");
+    $(".npt-brand").onclick=()=>{window.closeNptWalk?.();homeMode("public");};
     const home = $("#home");
     home.insertAdjacentHTML("beforeend", `<div class="accountbar"><span id="cloudStatus">Loading NPT...</span><button class="btn" id="nptSignOut" hidden>Sign out</button></div>
     <div class="section" id="publicSection"><div class="sectionhead"><div><h3>Explore Public Trips</h3><p>Anyone can view these trips without signing in</p></div><button class="btn" id="refreshPublicTrips">Refresh</button></div><div id="nptPublicList" class="publiclist"><div class="empty">Checking for public trips...</div></div></div>`);
-    $("#nptAccountBtn").onclick = () => user ? accountMenu() : showAuth();
-    $("#nptCancelAuth").onclick = hideAuth;
+    $("#myTrips").hidden=true;
+    $("#nptCancelAuth").onclick = ()=>{remember(null);hideAuth();};
     $("#nptAuth").addEventListener("click", e => { if(e.target.id === "nptAuth") hideAuth(); });
     $("#nptSignInForm").addEventListener("submit", requestLogin);
     $("#nptSignOut").onclick = async () => {
@@ -141,7 +169,7 @@
     }
   }
   function updateUI() {
-    $("#nptAccountBtn").textContent=user ? "My account" : "Sign in";
+    if(!user && tripHome==="mine") homeMode("public");
     $("#nptSignOut").hidden=!user;
     message(user ? "Signed in as "+(user.email||"NPT user")+" · your trips are saved privately in the cloud" : "Browsing as a guest · sign in when you're ready to create a trip");
     window.renderTrips();
@@ -155,15 +183,21 @@
   }
   async function refreshPublic() {
     if(!db)return;
-    const {data,error}=await db.from("npt_trips").select("id,name,start_date,length_days,start_location,end_location,parks,vehicle,preferences,itinerary,route_segments,campgrounds,visibility,allow_copy").eq("visibility","public").order("created_at",{ascending:false}).limit(60);
+    const {data,error}=await db.from("npt_trips").select("id,name,start_date,length_days,start_location,end_location,parks,vehicle,preferences,itinerary,route_segments,campgrounds,visibility,allow_copy").eq("visibility","public").order("created_at",{ascending:true}).limit(60);
     if(error){$("#nptPublicList").innerHTML='<div class="empty">Public trips are unavailable right now.</div>';displayError(error);return;}
     publicTrips=(data||[]).map(tripFromRow);
     const target=$("#nptPublicList");target.innerHTML="";
     if(!publicTrips.length){target.innerHTML='<div class="empty">No public trips yet. Published trips will appear here.</div>';return;}
     for(const t of publicTrips){
       const c=document.createElement("div");c.className="tripcard";
-      c.innerHTML='<h4>'+clean(t.name)+'</h4><p>'+clean(t.startLocation)+' · '+(t.parks||[]).length+' parks</p><p>'+clean(t.startDate)+' · '+t.length+' days</p><span class="badge link">Public</span><div class="tripactions"><button class="btn primary">View Trip</button></div>';
-      c.querySelector("button").onclick=()=>window.showTrip(t,false);
+      c.innerHTML='<h4>'+clean(t.name)+'</h4><p>'+clean(t.startLocation)+' → '+clean(t.endLocation)+'</p><p>'+t.length+' days · '+t.parks.length+' parks</p><div class="tripactions"><button class="btn" data-details>Details</button><button class="btn primary" data-walk>Walk Me Through It</button><button class="btn" data-copy>Copy Trip</button></div>';
+      c.querySelector("[data-details]").onclick=()=>window.showTrip(t,false);
+      const walk=c.querySelector("[data-walk]");
+      walk.hidden=!t.days.length;
+      walk.onclick=()=>window.openNptWalk(t);
+      const copy=c.querySelector("[data-copy]");
+      copy.hidden=!t.allowCopy;
+      copy.onclick=()=>window.copySharedTrip(t);
       target.append(c);
     }
   }
@@ -237,7 +271,9 @@
     await refreshMine();await refreshPublic();oldShowHome();
   };
   window.showTrip = function(t,isOwner) {
+    window.closeNptWalk?.();
     lastViewed=t;
+    window.nptCanEdit=()=>Boolean(isOwner&&user&&lastViewed===t);
     oldShowTrip(t,isOwner);
     if(!isOwner){
       $("#copyTripBtn").style.display=t.allowCopy===false?"none":"inline-block";
@@ -260,7 +296,7 @@
     $("#copyLinkBtn").onclick=()=>navigator.clipboard.writeText($("#shareUrl").value).then(()=>message("Link copied to clipboard")).catch(()=>prompt("Copy this link:",$("#shareUrl").value));
   };
   window.renderPlanEditor = function(box, trip, index) {
-    if(!user || !trip.__remote || !mine.some(item=>item.id===trip.id) || !trip.updatedAt) return;
+    if(!window.nptCanEdit?.() || !user || !trip.__remote || !mine.some(item=>item.id===trip.id) || !trip.updatedAt) return;
     const day = trip.days[index];
     const editor = document.createElement("details");
     editor.className = "dayitem";
@@ -322,6 +358,20 @@
     };
     box.append(editor);
   };
+  window.saveNptStay=async function(trip,changed){
+    if(!window.nptCanEdit?.() || !user || !trip.updatedAt) throw Error("Open the trip under My Trips to edit a stay.");
+    const {data,error}=await db.from("npt_trips")
+      .update({...changed,updated_at:new Date().toISOString()})
+      .eq("id",trip.id).eq("owner_id",user.id).eq("updated_at",trip.updatedAt)
+      .select("updated_at").maybeSingle();
+    if(error) throw error;
+    if(!data) throw Error("This trip changed. Reopen it from My Trips and try again.");
+    trip.updatedAt=data.updated_at;
+    trip.days=changed.itinerary;
+    trip.segments=changed.route_segments;
+    trip.campgrounds=changed.campgrounds;
+    await refreshMine();
+  };
   async function setPrivacy(t) {
     if(!user)return showAuth();
     const vis=$("#nptTripVisibility").value;
@@ -356,8 +406,8 @@
   }
   window.copySharedTrip=async function(t) {
     if(t.allowCopy===false)return;
-    if(!user)return showAuth();
-    try{const copy={...t,name:t.name+" (Copy)",importedFromSwift:false,restorationStatus:false};const id=await savePayload(copy,"private");window.openTrip(id);}
+    if(!user){if(t.privacy==="public")remember({type:"copy",id:t.id});return showAuth();}
+    try{const copy={...t,startDate:t.startDate||null,name:t.name+" (Copy)",importedFromSwift:false,restorationStatus:false};const id=await savePayload(copy,"private");tripHome="mine";window.openTrip(id);}
     catch(e){alert("Couldn't copy trip: "+e.message);}
   };
   window.importNPTFile=async function(file) {
@@ -419,6 +469,7 @@
     updateUI();
     await ensureProfile();
     await Promise.all([refreshMine(),refreshPublic()]);
+    await resumeAction();
     loaded=true;
     if(location.hash.startsWith("#public=")||location.hash.startsWith("#unlisted="))await viewHash();
     window.addEventListener("hashchange",viewHash);

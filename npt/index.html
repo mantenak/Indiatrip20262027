@@ -42,16 +42,17 @@
 .homeactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .topactions #nptAccountBtn{display:block}
 </style>
+<link rel="stylesheet" href="./trip-views.css">
 </head>
 <body>
 <div class="app">
-<header class="top"><div class="topin"><div class="logo">NP</div><div class="brand"><h1>National Park Trip</h1></div><div class="topactions"></div></div></header>
+<header class="top"><div class="topin"><button class="npt-brand" type="button" onclick="showHome()"><img class="logo npt-logo" src="./npt-logo.webp" width="42" height="42" alt=""><span>National Park Trip</span></button><nav class="topactions" aria-label="Main navigation"><button class="topbtn" id="nptMyTrips">My Trips</button><button class="topbtn primary" id="nptNewTrip">+ New Trip</button></nav></div></header>
 <div class="wrap">
 <section id="home">
 <div class="section" id="myTrips">
   <div class="sectionhead">
     <h2>My Trips</h2>
-    <button class="btn primary" onclick="startWizard()">+ New trip</button>
+    
   </div>
   <div id="tripList"></div>
   <div class="homeactions">
@@ -63,7 +64,7 @@
 </section>
 
 <section id="viewer" class="viewer">
-<div class="viewerbar"><strong id="viewerMode">Trip</strong><div><button class="btn" onclick="showHome()">← My Trips</button> <button class="btn primary" id="copyTripBtn" style="display:none">Copy to My Trips</button></div></div>
+<div class="viewerbar"><strong id="viewerMode">Trip</strong><div><button class="btn" onclick="showHome()">← Back to trips</button> <button class="btn primary" id="copyTripBtn" style="display:none">Copy to My Trips</button></div></div>
 <div class="eyebrow" id="vPrivacy"></div><h2 id="vName"></h2><p id="vMeta"></p>
 <div class="summarybox"><dl>
 <dt>Start</dt><dd id="vStart"></dd>
@@ -260,9 +261,9 @@ function renderDetails(){
  $("#detailsButtons").innerHTML=tabs.map(([key,label])=>'<button class="btn'+(detailMode===key?" active":"")+'" data-detailmode="'+key+'">'+label+'</button>').join("");
  $$("[data-detailmode]").forEach(btn=>{btn.setAttribute("aria-pressed",String(btn.dataset.detailmode===detailMode));btn.onclick=()=>{detailMode=btn.dataset.detailmode;detailCount=20;renderDetails();$(`[data-detailmode="${detailMode}"]`).focus();};});
  const box=$("#detailsList");const more=$("#loadMoreDetails");box.innerHTML="";more.style.display="none";
- if(detailMode==="reservations"){
-   box.innerHTML='<div class="importnote">The restored file contains campground research and planning notes, not confirmed reservations. Availability, booking windows, and campground security-incident records still need verification.</div>';
-   return;
+ if(["reservations","campgrounds"].includes(detailMode) && window.renderNptStays){
+  window.renderNptStays(box,t,detailMode);
+  return;
  }
  const entries=detailMode==="stops"?(t.segments||[]):detailMode==="days"?(t.days||[]):(t.campgrounds||[]);
  if(detailMode==="days"){
@@ -333,6 +334,7 @@ const isAuthCallback = /[?&](code|error|error_code)=/.test(location.search)
 if (!isAuthCallback && !checkShared() && !location.hash.startsWith("#public=") && !location.hash.startsWith("#unlisted=")) showHome();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.76.1" defer></script>
+<script src="./trip-views.js" defer></script>
 <script src="./cloud.js" defer></script>
 </body>
 </html>
