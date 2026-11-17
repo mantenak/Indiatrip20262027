@@ -223,10 +223,12 @@
       if(loop&&i===0){
         const popup=el("div");
         popup.append(el("strong",trip.startLocation||"Round trip"),el("br"),
-          button("Departure",()=>state.select(0)),button("Return",()=>state.select(trip.days.length-1)));
+          button("Departure",()=>state.mode==="details"?playPreview(state,0):state.select(0)),
+          button("Return",()=>state.mode==="details"?playPreview(state,lastIndex):state.select(trip.days.length-1)));
         marker.bindPopup(popup);
         return;
       }
+      if(state.mode==="details"){marker.on("click",()=>playPreview(state,i));return;}
       if(endpoint){marker.on("click",()=>state.select(i===0?0:trip.days.length-1));return;}
       const s=trip.segments[i-1];
       const stayDays=trip.days.map((d,index)=>({d,index})).filter(({d})=>d.segmentNumber===s.sequence);
@@ -359,6 +361,7 @@
     caption.append(el("a",creditLabel,{href:url,target:"_blank",rel:"noopener noreferrer"}));
     photo.append(image,caption);
     entry.card.append(photo);
+    entry.onPhoto?.({src,alt,description,url,creditLabel});
   }
   const detailedPhotos=new Map();
   function loadStopPhotos(state,entries) {
@@ -399,7 +402,37 @@
       }
     });
   }
-  function renderDetailedStop(state,stop,segment,days,attractions) {
+  function openDetailedMapCard(state,stop,segment,attractions) {
+    const title=previewStopTitle(state,stop);
+    const content=el("section",undefined,{"aria-label":title,style:"width:min(205px, 57vw)"});
+    content.append(el("strong",stopSymbol(state.trip,stop.index,state.route.length-1)+" "+title));
+    const details=[segment?.location!==title?segment?.location:null,
+      segment?.nights?segment.nights+(segment.nights===1?" night":" nights"):null,segment?.hookups].filter(Boolean);
+    if(details.length) content.append(el("p",details.join(" · "),{style:"margin:5px 0"}));
+    const photoHost=el("div");
+    content.append(photoHost);
+    if(attractions.length) content.append(el("p",attractions.slice(0,2).join(" · "),{style:"margin:5px 0"}));
+    state.preview.currentLabel.remove();
+    state.preview.mapCard=state.L.popup({offset:[0,-13],maxWidth:225,autoPanPadding:[12,12],closeOnClick:false})
+      .setLatLng(stop.point).setContent(content).openOn(state.map);
+    let rank=Infinity;
+    return (entry,photo)=>{
+      const priority=entry.type==="Campground"?0:entry.type==="Park or destination"?1:2;
+      if(!photoHost.isConnected||priority>=rank) return;
+      const image=el("img",undefined,{src:photo.src,alt:photo.alt,style:"display:block;width:100%;max-height:105px;object-fit:cover;border-radius:6px"});
+      const caption=el("figcaption",entry.name+" · "+photo.description,{style:"font-size:11px;line-height:1.3"});
+      const link=el("a","Photo credit",{href:photo.url,target:"_blank",rel:"noopener noreferrer",style:"font-size:11px"});
+      const figure=el("figure",undefined,{style:"margin:7px 0"});
+      figure.append(image,caption,link);
+      image.onload=()=>{
+        if(!photoHost.isConnected||priority>=rank) return;
+        rank=priority;
+        photoHost.replaceChildren(figure);
+        state.preview?.mapCard?.update();
+      };
+    };
+  }
+  function renderDetailedStop(state,stop,segment,days,attractions,showOnMap) {
     const {trip,panel}=state;
     if(days.length){
       const first=days[0].dayNumber,last=days.at(-1).dayNumber;
@@ -430,9 +463,13 @@
     else if(segment?.location&&segment.location!==segment.campground) card(segment.location,"Stopover",undefined);
     for(const name of attractions) card(name,"Attraction or activity",segment?.park||segment?.location);
     if(!entries.length) panel.append(el("p","No additional stops or activities are listed here."));
+    if(showOnMap){
+      const updateMapPhoto=openDetailedMapCard(state,stop,segment,attractions);
+      for(const entry of entries) entry.onPhoto=photo=>updateMapPhoto(entry,photo);
+    }
     loadStopPhotos(state,entries);
   }
-  function previewHighlights(state,stop) {
+  function previewHighlights(state,stop,showOnMap=false) {
     const {trip,panel}=state;
     const segment=trip.segments[stop.index-1];
     const days=segment?trip.days.filter(day=>String(day.segmentNumber)===String(segment.sequence)):[];
@@ -445,7 +482,7 @@
     if(state.mode!=="details") addLandmarkPhoto(state,title);
     const attractions=[...new Set(days.flatMap(day=>(day.activities||[]).map(a=>typeof a==="string"?a:a?.name)).filter(name=>
       name&&!/fuel|check propane|campground setup|laundry|groceries|dump station|drive and|planning|travel day|set up camp/i.test(name)))];
-    if(state.mode==="details") renderDetailedStop(state,stop,segment,days,attractions);
+    if(state.mode==="details") renderDetailedStop(state,stop,segment,days,attractions,showOnMap);
     else if(attractions.length){
       const list=el("ul");
       attractions.slice(0,3).forEach(name=>list.append(el("li",name)));
@@ -461,6 +498,7 @@
     preview.marker.remove();
     preview.currentLabel.remove();
     preview.nextLabel.remove();
+    preview.mapCard?.remove();
     state.preview=null;
     state.pause.hidden=true;
     state.overview.hidden=true;
@@ -499,9 +537,9 @@
     preview.currentLabel=L.tooltip({permanent:true,direction:"top",offset:[0,-13],opacity:1});
     preview.nextLabel=L.tooltip({permanent:true,direction:"bottom",offset:[0,13],opacity:1});
     showPreviewStop(state,preview.currentLabel,start);
-    previewHighlights(state,start);
+    if(atStop) map.setView(start.point,Math.min(12,Math.max(9,map.getZoom())),{animate:false});
+    previewHighlights(state,start,atStop);
     state.jump.value=String(start.index);
-    if(atStop) fitPreviewLeg(map,L,[start.point],reduced,state.speed);
     const tick=now=>{
       if(state.preview!==preview||preview.paused) return;
       const from=stops[preview.index], to=stops[preview.index+1];
@@ -523,7 +561,7 @@
       if(fraction===1){
         preview.nextLabel.remove();
         showPreviewStop(state,preview.currentLabel,to);
-        previewHighlights(state,to);
+        previewHighlights(state,to,state.mode==="details");
         state.jump.value=String(to.index);
         preview.index++;
         if(preview.index===stops.length-1){
@@ -550,7 +588,12 @@
         cancelAnimationFrame(preview.frame);
         map.stop();
       } else {
-        preview.atStop=false;
+        if(preview.atStop){
+          preview.mapCard?.remove();
+          preview.mapCard=null;
+          showPreviewStop(state,preview.currentLabel,stops[preview.index]);
+          preview.atStop=false;
+        }
         if(preview.points&&!preview.newLeg) fitPreviewLeg(map,L,preview.points,reduced,state.speed);
         preview.last=null;
         preview.frame=requestAnimationFrame(tick);
