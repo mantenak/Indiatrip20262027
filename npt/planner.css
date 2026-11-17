@@ -4,3 +4,5 @@
 
 /* Keep Leaflet panes inside their map; planner is above all map controls. */
 .npt-planner{z-index:2000;isolation:isolate}.npt-walk-map{isolation:isolate}
+
+.np-status:not(:empty){padding:12px 16px;background:#fff0cf;border:1px solid #dcc38c;border-radius:8px;font-weight:600;color:#573f18}
