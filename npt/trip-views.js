@@ -192,6 +192,7 @@
   function drawWalk(state){
     const {trip,map,L,route,dayIndex,panel,key}=state;
     state.layers?.remove();
+    state.attractionOverview?.remove();
     state.activity?.remove();
     state.activity=null;
     state.layers=L.layerGroup().addTo(map);
@@ -241,6 +242,7 @@
     key.textContent=state.roads?"Road routing uses a standard driving profile. RV clearance and access are unverified. Dashed lines show approximate connections.":"Dashed lines connect approximate stops. They do not show the roads to drive.";
     panel.replaceChildren();
     if(full){
+      drawOverviewAttractions(state);
       panel.append(el("h3","Entire itinerary"),el("p",`${trip.days.length} days · ${trip.segments.length} stops`));
       const dayList=el("div",undefined,{style:"display:grid;gap:6px"});
       getStays(trip).forEach(stay=>{
@@ -386,6 +388,11 @@
     if(state.trip.privacy!=="public"||!entries.length) return;
     const photoEntries=[];
     for(const entry of entries){
+      if(entry.feature){
+        const {src,alt,url}=entry.feature;
+        appendStopPhoto(entry,src,alt,"Attraction photo",url,"National Park Service");
+        continue;
+      }
       if(entry.type==="Campground"){
         const gallery=Object.hasOwn(campgroundGalleries,entry.name)?campgroundGalleries[entry.name]:null;
         if(gallery){
@@ -473,7 +480,7 @@
     const photoHost=el("details");
     photoHost.hidden=true;
     photoHost.append(el("summary","Stop photo"));
-    content.append(photoHost);
+    content.insertBefore(photoHost,facts.parentNode===content?facts:null);
     const notes=officialStopNotes[segment?.park+"|"+segment?.campground];
     if(notes){
       const row=el("p",notes.text+" ",{style:"margin:6px 0"});
@@ -491,16 +498,17 @@
     state.preview.mapCard=state.L.popup({offset:[0,-13],maxWidth:275,maxHeight:Math.floor(state.map.getSize().y*0.64),autoPanPadding:[12,12],closeOnClick:false})
       .setLatLng(stop.point).setContent(content).openOn(state.map);
     photoHost.addEventListener("toggle",()=>state.preview?.mapCard?.update());
-    let rank=Infinity, photos=[], index=0;
+    let rank=Infinity, photos=[], index=0, navigated=false;
     function showPhoto(){
       const {entry,figure}=photos[index];
       const campground=entry.type==="Campground";
-      const summary=el("summary",campground?"Campground photos":"Stop photo");
+      const summary=el("summary",campground?"Campground photos":entry.type==="Attraction or activity"?"Attraction photos":"Stop photo");
       photoHost.replaceChildren(summary,figure);
       if(photos.length>1){
         const controls=el("div",undefined,{style:"display:flex;gap:6px;align-items:center;justify-content:space-between"});
         const step=by=>{
           if(state.preview?.dwellTimer!=null) state.preview.toggle();
+          navigated=true;
           index=(index+by+photos.length)%photos.length;
           showPhoto();
         };
@@ -513,7 +521,7 @@
       state.preview?.mapCard?.update();
     }
     return (entry,photo)=>{
-      const priority=entry.type==="Campground"?0:entry.type==="Park or destination"?1:2;
+      const priority=entry.feature?0:entry.type==="Attraction or activity"?1:entry.type==="Campground"?2:3;
       if(!photoHost.isConnected||priority>rank) return;
       const image=el("img",undefined,{alt:photo.alt,style:"display:block;width:100%;max-height:130px;object-fit:cover;border-radius:6px"});
       const caption=el("figcaption",entry.name+" · "+photo.description,{style:"font-size:11px;line-height:1.3"});
@@ -526,13 +534,97 @@
           rank=priority;
           photos=[];
           index=0;
-          if(entry.type==="Campground") photoHost.open=true;
+          navigated=false;
+          if(entry.type==="Campground"||entry.type==="Attraction or activity") photoHost.open=true;
         }
+        const selected=photos[index]?.src;
         photos.push({entry,figure,src:photo.src});
+        photos.sort((a,b)=>(a.entry.feature?.order??99)-(b.entry.feature?.order??99));
+        index=navigated&&selected?Math.max(0,photos.findIndex(item=>item.src===selected)):0;
         showPhoto();
       };
       image.src=photo.src;
     };
+  }
+  const featuredAttractions={
+    "Big Badlands Overlook":{"park":"Badlands National Park","coords":[43.78478,-101.90008],"src":"https://www.nps.gov/common/uploads/cropped_image/primary/D6950675-9DB8-D321-840940577C56FC4D.jpg?width=700","alt":"Badlands formations from Big Badlands Overlook","url":"https://www.nps.gov/places/big-badlands-overlook.htm","order":1},
+    "Notch Trail":{"park":"Badlands National Park","coords":[43.760087,-101.928207],"src":"https://www.nps.gov/common/uploads/cropped_image/primary/52E30E8A-FA06-C9F8-9CDB1A829746C322.jpg?width=700","alt":"Notch Trailhead and the surrounding Badlands formations","url":"https://www.nps.gov/places/notch-trail.htm","order":2},
+    "Jenny Lake":{"park":"Grand Teton National Park","coords":[43.751387,-110.7214],"src":"https://www.nps.gov/grte/planyourvisit/images/jennylake_10.jpg?maxwidth=650&autorotate=false","alt":"Teton peaks rising above Jenny Lake","url":"https://www.nps.gov/grte/planyourvisit/jennylakeplan.htm","order":1},
+    "Old Faithful":{"park":"Yellowstone National Park","coords":[44.460364,-110.828219],"src":"https://www.nps.gov/thingstodo/images/ndh-yell-thumb-5489_1.jpg?maxwidth=650&autorotate=false","alt":"Old Faithful erupting in front of visitors","url":"https://www.nps.gov/thingstodo/photography-in-yellowstone.htm","order":1},
+    "Grand Prismatic Spring":{"park":"Yellowstone National Park","coords":[44.525082,-110.838189],"src":"https://www.nps.gov/thingstodo/images/jwf-gpo-thumb_1.jpg?maxwidth=650&autorotate=false","alt":"View of Grand Prismatic Spring from the overlook","url":"https://www.nps.gov/thingstodo/photography-in-yellowstone.htm","order":2},
+    "Glacier Point":{"park":"Yosemite National Park","coords":[37.730665,-119.573782],"src":"https://www.nps.gov/common/uploads/cropped_image/primary/DC4F0EB1-ACDC-BFE5-7A2DEEB966B91D2A.jpg?width=700","alt":"Visitors looking out from Glacier Point","url":"https://www.nps.gov/places/000/glacier-point.htm","order":1},
+    "Mather Point":{"park":"Grand Canyon National Park","coords":[36.061,-112.108],"src":"https://www.nps.gov/common/uploads/cropped_image/primary/77821AE0-9566-D7B2-7560257BF827D070.jpg?width=700","alt":"Grand Canyon from Mather Point","url":"https://www.nps.gov/places/000/mather-point.htm","order":1},
+    "Desert View Watchtower":{"park":"Grand Canyon National Park","coords":[36.0441,-111.826161],"src":"https://www.nps.gov/common/uploads/cropped_image/primary/DC1C0370-C525-3032-77CC28C8F979E458.jpg?width=700","alt":"Desert View Watchtower at the canyon rim","url":"https://www.nps.gov/places/000/desert-view-watchtower.htm","order":2},
+    "Badwater Basin":{"park":"Death Valley National Park","coords":[36.229805,-116.767413],"src":"https://www.nps.gov/common/uploads/cropped_image/primary/E2001345-1DD8-B71B-0B106BA50A4CB9AD.jpg?width=700","alt":"Badwater Basin salt flats at sunset","url":"https://www.nps.gov/thingstodo/visit-badwater-basin.htm","order":1}
+  };
+  function stopAttractions(trip,segment){
+    if(!segment) return [];
+    const result=new Map();
+    for(const day of trip.days){
+      if(String(day.segmentNumber)!==String(segment.sequence)) continue;
+      for(const item of day.activities||[]){
+        const name=typeof item==="string"?item:item?.name;
+        if(!name) continue;
+        const known=Object.hasOwn(featuredAttractions,name)?featuredAttractions[name]:null;
+        const feature=known?.park===segment.park?known:null;
+        const coords=point(item?.mapPoint)||feature?.coords;
+        if(coords) result.set(name,{name,coords,feature});
+      }
+    }
+    return [...result.values()];
+  }
+  function openAttractionMapCard(state,attraction){
+    if(state.preview?.dwellTimer!=null) state.preview.toggle();
+    state.preview?.mapCard?.remove();
+    const card=el("section",undefined,{"aria-label":attraction.name,style:"width:min(225px, 60vw)"});
+    card.append(el("strong","◆ "+attraction.name));
+    const popup=state.L.popup({offset:[0,-11],maxWidth:260,autoPanPadding:[12,12]});
+    if(attraction.feature){
+      const {src,alt,url}=attraction.feature;
+      const image=el("img",undefined,{alt,style:"display:block;width:100%;max-height:140px;object-fit:cover;border-radius:7px;margin:6px 0"});
+      image.onerror=()=>image.remove();
+      image.onload=()=>popup.update();
+      card.append(image,el("a","Park information and photo credit",{href:url,target:"_blank",rel:"noopener noreferrer"}));
+      image.src=src;
+    } else card.append(el("br"),mapsLink("Directions",attraction.name));
+    popup.setLatLng(attraction.coords).setContent(card).openOn(state.map);
+    if(state.preview) state.preview.mapCard=popup;
+  }
+  function addAttractionMarker(state,layer,attraction,onClick){
+    const badge=el("span","◆",{class:"npt-map-pin",style:"background:#285b8a;color:white"});
+    const icon=state.L.divIcon({className:"leaflet-div-icon",html:badge,iconSize:[25,25],iconAnchor:[12,12]});
+    state.L.marker(attraction.coords,{icon,title:attraction.name,alt:attraction.name,zIndexOffset:200})
+      .addTo(layer).bindTooltip(el("span",attraction.name)).on("click",onClick);
+  }
+  function drawOverviewAttractions(state) {
+    state.attractionOverview?.remove();
+    if(state.mode!=="details") return;
+    const layer=state.L.layerGroup().addTo(state.map);
+    state.attractionOverview=layer;
+    const seen=new Set();
+    state.trip.segments.forEach((segment,index)=>{
+      if(!state.route[index+1]) return;
+      for(const attraction of stopAttractions(state.trip,segment)){
+        const key=attraction.name+attraction.coords.join(",");
+        if(seen.has(key)) continue;
+        seen.add(key);
+        addAttractionMarker(state,layer,attraction,()=>{
+          playPreview(state,index+1);
+          openAttractionMapCard(state,attraction);
+        });
+      }
+    });
+  }
+  function drawStopAttractions(state,stop,attractions){
+    const preview=state.preview;
+    preview.attractionLayer?.remove();
+    if(!attractions.length) return;
+    const layer=state.L.layerGroup().addTo(state.map);
+    preview.attractionLayer=layer;
+    for(const attraction of attractions) addAttractionMarker(state,layer,attraction,()=>openAttractionMapCard(state,attraction));
+    const points=[stop.point,...attractions.map(attraction=>attraction.coords)];
+    if(points.some(coords=>!state.map.getBounds().contains(coords)))
+      state.map.fitBounds(state.L.latLngBounds(points),{maxZoom:12,padding:[35,35],animate:false});
   }
   function renderDetailedStop(state,stop,segment,days,attractions,showOnMap) {
     const {trip,panel}=state;
@@ -541,13 +633,20 @@
       if(first!=null) panel.append(el("p",first===last?"Day "+first:"Days "+first+"–"+last));
     }
     const entries=[];
+    const mapped=stopAttractions(trip,segment);
+    const byName=new Map(mapped.map(attraction=>[attraction.name,attraction]));
     function card(name,type,location){
       const section=el("section",undefined,{class:"dayitem"});
-      section.append(el("h4",name),el("p",type),mapsLink("View on map",name,location));
+      section.append(el("h4",name),el("p",type));
+      const attraction=type==="Attraction or activity"?byName.get(name):null;
+      if(attraction) section.append(button("Show on trip map",()=>openAttractionMapCard(state,attraction)));
+      else section.append(mapsLink("View on map",name,location));
       panel.append(section);
-      entries.push({card:section,name,type,location,park:segment?.park});
+      entries.push({card:section,name,type,location,park:segment?.park,feature:attraction?.feature});
       return section;
     }
+    const ordered=[...new Set([...attractions,...mapped.map(item=>item.name)])].sort((a,b)=>(byName.get(a)?.feature?.order??99)-(byName.get(b)?.feature?.order??99));
+    for(const name of ordered) card(name,"Attraction or activity",segment?.park||segment?.location);
     const campground=findDetailedCampground(trip,segment);
     if(segment?.campground){
       const section=card(segment.campground,"Campground",segment.location);
@@ -562,10 +661,10 @@
     }
     if(segment?.park&&!/travel day/i.test(segment.park)&&segment.park!==segment.campground) card(segment.park,"Park or destination",segment.location);
     else if(segment?.location&&segment.location!==segment.campground) card(segment.location,"Stopover",undefined);
-    for(const name of attractions) card(name,"Attraction or activity",segment?.park||segment?.location);
     if(!entries.length) panel.append(el("p","No additional stops or activities are listed here."));
     if(showOnMap){
-      const updateMapPhoto=openDetailedMapCard(state,stop,segment,days,campground,attractions);
+      drawStopAttractions(state,stop,mapped);
+      const updateMapPhoto=openDetailedMapCard(state,stop,segment,days,campground,ordered);
       for(const entry of entries) entry.onPhoto=photo=>updateMapPhoto(entry,photo);
     }
     loadStopPhotos(state,entries);
@@ -601,6 +700,7 @@
     preview.currentLabel.remove();
     preview.nextLabel.remove();
     preview.mapCard?.remove();
+    preview.attractionLayer?.remove();
     state.preview=null;
     state.pause.hidden=true;
     state.overview.hidden=true;
@@ -635,6 +735,7 @@
         zIndexOffset:1500,interactive:false
       }).addTo(map)};
     state.preview=preview;
+    state.attractionOverview?.remove();
     state.pause.hidden=atStop&&!preview.done;
     state.pause.textContent=preview.done?"Replay":"Pause";
     state.continueStop.hidden=!atStop||preview.done;
@@ -656,6 +757,7 @@
       if(preview.atStop){
         preview.mapCard?.remove();
         preview.mapCard=null;
+        preview.attractionLayer?.remove();
         showPreviewStop(state,preview.currentLabel,stops[preview.index]);
         preview.atStop=false;
       }
