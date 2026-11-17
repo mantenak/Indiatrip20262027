@@ -393,14 +393,23 @@
       });
     }).catch(()=>overlay.remove());
   }
+  function previewStopTitle(state,stop) {
+    if(stop.index===0) return state.trip.startLocation||"Departure";
+    if(stop.index===state.route.length-1) return state.trip.endLocation||"Return";
+    const segment=state.trip.segments[stop.index-1];
+    return segment?.campground||segment?.park||segment?.location||"Stop "+stop.index;
+  }
   function previewHighlights(state,stop) {
     const {trip,panel}=state;
     const segment=trip.segments[stop.index-1];
     const days=segment?trip.days.filter(day=>String(day.segmentNumber)===String(segment.sequence)):[];
     const title=stop.index===0?trip.startLocation:segment?.park||segment?.location||trip.endLocation;
-    panel.replaceChildren(el("h3",title||"Trip stop"));
-    if(segment?.location&&segment.location!==title) panel.append(el("p",segment.location));
-    if(segment?.campground) panel.append(el("p",segment.campground+(segment.nights?" · "+segment.nights+" nights":"")));
+    const stopTitle=previewStopTitle(state,stop);
+    state.stopLabel.textContent=stopTitle;
+    panel.replaceChildren(el("h3",stopTitle));
+    if(title&&title!==stopTitle) panel.append(el("p",title));
+    if(segment?.location&&segment.location!==title&&segment.location!==stopTitle) panel.append(el("p",segment.location));
+    if(segment?.nights) panel.append(el("p",segment.nights+(segment.nights===1?" night":" nights")));
     addLandmarkPhoto(state,title);
     const attractions=[...new Set(days.flatMap(day=>(day.activities||[]).map(a=>typeof a==="string"?a:a?.name)).filter(name=>
       name&&!/fuel|check propane|campground setup|laundry|groceries|dump station|drive and|planning|travel day|set up camp/i.test(name)))];
@@ -421,6 +430,7 @@
     state.preview=null;
     state.pause.hidden=true;
     state.overview.hidden=true;
+    state.stopLabel.hidden=true;
   }
   function playPreview(state) {
     if(!state.map) return;
@@ -438,10 +448,11 @@
     state.pause.hidden=false;
     state.pause.textContent="Pause";
     state.overview.hidden=false;
+    state.stopLabel.hidden=false;
     previewHighlights(state,stops[0]);
     let lastBearing=driveBearing(stops[0].point,stops[1].point);
-    preview.camera={location:stops[0].point,zoom:10,bearing:lastBearing,pitch:reduced?0:53};
-    map.setView(stops[0].point,10,{animate:false});
+    preview.camera={location:stops[0].point,zoom:9,bearing:lastBearing,pitch:reduced?0:53};
+    map.setView(stops[0].point,9,{animate:false});
     if(!reduced) addPerspective(state,preview);
     const tick=now=>{
       if(state.preview!==preview||preview.paused) return;
@@ -450,7 +461,8 @@
         const road=to.index===from.index+1?state.roads?.[from.index]:null;
         preview.sample=previewLeg(road?[from.point,...road,to.point]:[from.point,to.point]);
         const miles=milesBetween(from.point,to.point);
-        preview.zoom=miles<12?13:miles<35?11.5:miles<100?9.5:8;
+        preview.zoom=miles<12?10.5:miles<35?10:miles<100?8.5:7.5;
+        preview.approaching=false;
         preview.hold=preview.index===0?800:1250;
         preview.travel=road?1400:1100;
         preview.newLeg=false;
@@ -458,13 +470,17 @@
       if(preview.last!==null) preview.elapsed+=Math.max(0,now-preview.last)*state.speed;
       preview.last=now;
       const fraction=Math.min(1,Math.max(0,(preview.elapsed-preview.hold)/preview.travel));
+      if(fraction>0&&fraction<1&&!preview.approaching){
+        state.stopLabel.textContent="Next: "+previewStopTitle(state,to);
+        preview.approaching=true;
+      }
       if(fraction>0&&(!reduced||fraction===1)){
         const location=preview.sample(fraction);
         preview.marker.setLatLng(location);
         if(fraction===1||now-(preview.lastPan||0)>75){
           const proximity=Math.max(0,(fraction-0.65)/0.35);
           const approach=proximity*proximity*(3-2*proximity);
-          const zoom=preview.zoom+(Math.max(11,preview.zoom)-preview.zoom)*approach;
+          const zoom=preview.zoom+(Math.max(9.5,preview.zoom)-preview.zoom)*approach;
           const ahead=preview.sample(Math.min(1,fraction+0.12));
           if(milesBetween(location,ahead)>0.07){
             const next=driveBearing(location,ahead);
@@ -526,7 +542,7 @@
     active.root.remove();
     active=null;
   };
-  window.openNptWalk=async (trip,{autoplay=false}={})=>{
+  window.openNptWalk=async trip=>{
     window.closeNptWalk();
     document.getElementById("home").style.display="none";
     document.getElementById("viewer").classList.remove("open");
@@ -544,7 +560,7 @@
     trip.days.forEach((day,i)=>select.append(el("option",`Day ${day.dayNumber||i+1} · ${day.park||day.location||"Travel"}`,{value:String(i)})));
     const roads=button("Load road route",()=>loadRoads(state,roads));
     roads.hidden=true;
-    const fullTrip=button("Preview Drive",()=>playPreview(state));
+    const fullTrip=button("Play Preview",()=>playPreview(state));
     fullTrip.disabled=true;
     const pause=button("Pause",()=>state.preview?.toggle());
     const overview=button("Map overview",()=>state.select(null));
@@ -553,7 +569,9 @@
     const speed=el("select",undefined,{"aria-label":"Preview speed"});
     speed.append(el("option","Normal speed",{value:"1"}),el("option","2× speed",{value:"2"}),el("option","4× speed",{value:"4"}));
     speed.onchange=()=>{state.speed=Number(speed.value);};
-    const state={root,trip,key,panel,mapNode,pause,overview,speed:1,dayIndex:null,abort:new AbortController(),
+    const stopLabel=el("div",undefined,{role:"status",style:"position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:950;max-width:75%;width:max-content;padding:6px 12px;border-radius:10px;background:#18382f;color:white;font-weight:700;text-align:center;pointer-events:none"});
+    stopLabel.hidden=true;
+    const state={root,trip,key,panel,mapNode,stopLabel,pause,overview,speed:1,dayIndex:null,abort:new AbortController(),
       route:[point(trip.preferences?.mapStart),...trip.segments.map(s=>point(s.mapPoint)),point(trip.preferences?.mapEnd)],
       select(index){
         stopPreview(state);
@@ -576,12 +594,12 @@
       if(active!==state) return;
       state.L=L;
       state.map=L.map(mapNode,{scrollWheelZoom:false}).setView([43,-104],4);
+      mapNode.append(stopLabel);
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(state.map);
       drawWalk(state);
       fullTrip.disabled=state.route.filter(Boolean).length<2;
       roads.hidden=trip.privacy!=="public"||state.route.some(p=>!p);
       if(state.route.some(p=>!p)) key.textContent="Some route stops do not have map coordinates.";
-      if(autoplay&&!fullTrip.disabled) playPreview(state);
     } catch(error){
       key.textContent="The interactive map could not load.";
       const items=el("ol");

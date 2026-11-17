@@ -279,7 +279,7 @@
   };
   function openPublicMap(trip) {
     history.replaceState(null,"",location.pathname+location.search+"#public="+encodeURIComponent(trip.id)+"&view=map");
-    window.openNptWalk(trip,{autoplay:true});
+    window.openNptWalk(trip);
   }
   window.showTrip = function(t,isOwner) {
     window.closeNptWalk?.();
