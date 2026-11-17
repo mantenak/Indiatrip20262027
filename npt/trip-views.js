@@ -245,7 +245,7 @@
       panel.append(el("h4","Activities"));
       const list=el("ul");
       day.activities.forEach(activity=>{
-        const name=typeof activity==="string"?activity:activity.name;
+        const name=typeof activity==="string"?activity:activity?.name;
         if(!name) return;
         const item=el("li",name);
         const coords=point(activity.mapPoint);
@@ -269,7 +269,7 @@
     if(day.notes) panel.append(el("p",day.notes));
   }
   async function loadRoads(state,control){
-    if(state.route.some(p=>!p)){state.key.textContent="Road routing needs coordinates for every stop.";return;}
+    if(state.trip.privacy!=="public"||state.route.some(p=>!p)) return;
     control.disabled=true;
     state.key.textContent="Loading the driving route...";
     try {
@@ -337,9 +337,8 @@
       state.map=L.map(mapNode,{scrollWheelZoom:false}).setView([43,-104],4);
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(state.map);
       drawWalk(state);
-      roads.hidden=state.route.some(p=>!p);
-      if(roads.hidden) key.textContent="Some route stops do not have map coordinates.";
-      else void loadRoads(state,roads);
+      roads.hidden=trip.privacy!=="public"||state.route.some(p=>!p);
+      if(state.route.some(p=>!p)) key.textContent="Some route stops do not have map coordinates.";
     } catch(error){
       key.textContent="The interactive map could not load.";
       const items=el("ol");
