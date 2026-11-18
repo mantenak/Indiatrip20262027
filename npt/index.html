@@ -42,12 +42,12 @@
 .homeactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .topactions #nptAccountBtn{display:block}
 </style>
-<link rel="stylesheet" href="./trip-views.css?v=stop-editor-5">
-<link rel="stylesheet" href="./planner.css?v=stop-editor-5">
+<link rel="stylesheet" href="./trip-views.css?v=stop-editor-logo-6">
+<link rel="stylesheet" href="./planner.css?v=stop-editor-logo-6">
 </head>
 <body>
 <div class="app">
-<header class="top"><div class="topin"><button class="npt-brand" type="button" onclick="showHome()"><img class="logo npt-logo" src="./npt-logo.webp" width="42" height="42" alt=""><span>National Park Trip</span></button><nav class="topactions" aria-label="Main navigation"><button class="topbtn" id="nptMyTrips">My Trips</button><button class="topbtn primary" id="nptNewTrip">+ New Trip</button></nav></div></header>
+<header class="top"><div class="topin"><button class="npt-brand" type="button" onclick="showHome()"><img class="logo npt-logo" src="./npt-logo.webp" width="72" height="72" alt="National Park Trip logo"><span>National Park Trip</span></button><nav class="topactions" aria-label="Main navigation"><button class="topbtn" id="nptMyTrips">My Trips</button><button class="topbtn primary" id="nptNewTrip">+ New Trip</button></nav></div></header>
 <div class="wrap">
 <section id="home">
 <div class="section" id="myTrips">
@@ -335,10 +335,10 @@ const isAuthCallback = /[?&](code|error|error_code)=/.test(location.search)
 if (!isAuthCallback && !checkShared() && !location.hash.startsWith("#public=") && !location.hash.startsWith("#unlisted=")) showHome();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.76.1" defer></script>
-<script src="./trip-views.js?v=stop-editor-5" defer></script>
-<script src="./cloud.js?v=stop-editor-5" defer></script>
-<script src="./planner-core.js?v=stop-editor-5" defer></script>
-<script src="./planner.js?v=stop-editor-5" defer></script>
+<script src="./trip-views.js?v=stop-editor-logo-6" defer></script>
+<script src="./cloud.js?v=stop-editor-logo-6" defer></script>
+<script src="./planner-core.js?v=stop-editor-logo-6" defer></script>
+<script src="./planner.js?v=stop-editor-logo-6" defer></script>
 </body>
 </html>
 
