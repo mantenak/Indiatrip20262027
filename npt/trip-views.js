@@ -239,7 +239,7 @@
       stayDays.forEach(({d,index})=>popup.append(button("Day "+(d.dayNumber||index+1),()=>state.select(index))));
       marker.bindPopup(popup);
     });
-    const bounds=full?route.filter(Boolean):hasDrive&&previous&&destination?(state.roads?.[segmentIndex-1]||[previous,destination]):destination?[destination]:[];
+    const bounds=full?(state.roads?.flat()||route.filter(Boolean)):hasDrive&&previous&&destination?(state.roads?.[segmentIndex-1]||[previous,destination]):destination?[destination]:[];
     if(bounds.length) map.fitBounds(bounds,{padding:[28,28],maxZoom:full?9:13});
     key.textContent=state.roads?"Road routing uses a standard driving profile. RV clearance and access are unverified. Dashed lines show approximate connections.":"Dashed lines connect approximate stops. They do not show the roads to drive.";
     panel.replaceChildren();
@@ -491,26 +491,12 @@
     const content=el("section",undefined,{"aria-label":title,style:"width:min(254px, 62vw)"});
     content.append(el("strong",stopSymbol(state.trip,stop.index,state.route.length-1)+" "+title));
     if(segment?.location&&segment.location!==title) content.append(el("p",segment.location,{style:"margin:3px 0"}));
-    const facts=el("dl",undefined,{class:"npt-stay-fields",style:"grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:7px 0"});
-    detailedStopFacts(state.trip,segment,days,campground).forEach(([label,value])=>dataRow(facts,label,value));
-    if(facts.childElementCount) content.append(facts);
+    const stay=detailedStopFacts(state.trip,segment,days,campground).find(([label])=>label==="Stay")?.[1];
+    if(stay) content.append(el("p",stay,{style:"margin:4px 0"}));
     const photoHost=el("details");
     photoHost.hidden=true;
     photoHost.append(el("summary","Stop photo"));
-    content.insertBefore(photoHost,facts.parentNode===content?facts:null);
-    const notes=officialStopNotes[segment?.park+"|"+segment?.campground];
-    if(notes){
-      const row=el("p",notes.text+" ",{style:"margin:6px 0"});
-      row.append(el("a",notes.source,{href:notes.url,target:"_blank",rel:"noopener noreferrer"}));
-      content.append(row);
-    }
-    if(campground?.reservationNotes){
-      const booking=el("p","Booking: "+campground.reservationNotes,{style:"margin:6px 0"});
-      content.append(booking);
-    }
-    const url=campground&&bookingLink(campground);
-    if(url) content.append(el("a","Booking information",{href:url,target:"_blank",rel:"noopener noreferrer"}));
-    if(attractions.length) content.append(el("p","Planned nearby: "+attractions.slice(0,2).join(" · "),{style:"margin:6px 0"}));
+    content.append(photoHost,button("View stop details",()=>{state.preview?.toggle && !state.preview.paused && state.preview.toggle();state.panel.scrollIntoView({block:"nearest",behavior:"smooth"});}));
     state.preview.currentLabel.remove();
     state.preview.mapCard=state.L.popup({offset:[0,-13],maxWidth:275,maxHeight:Math.floor(state.map.getSize().y*0.64),autoPanPadding:[12,12],closeOnClick:false})
       .setLatLng(stop.point).setContent(content).openOn(state.map);
@@ -671,9 +657,10 @@
     if(segment?.campground){
       const section=card(segment.campground,"Campground",segment.location);
       const fields=el("dl",undefined,{class:"npt-stay-fields"});
-      dataRow(fields,"Nights",segment.nights);
-      dataRow(fields,"Hookups",segment.hookups||campground?.hookups);
-      dataRow(fields,"RV length limit",campground?.maxRVFeet?campground.maxRVFeet+" ft":null);
+      detailedStopFacts(trip,segment,days,campground).forEach(([label,value])=>dataRow(fields,label,value));
+      dataRow(fields,"Trailer length limit",campground?.maxTrailerFeet?campground.maxTrailerFeet+" ft · confirm individual site":null);
+      const notes=officialStopNotes[segment?.park+"|"+segment?.campground];
+      if(notes){const note=el("p",notes.text+" ");note.append(el("a",notes.source,{href:notes.url,target:"_blank",rel:"noopener noreferrer"}));section.append(note);}
       section.append(fields);
       if(campground?.reservationNotes) section.append(el("p",campground.reservationNotes));
       const url=campground&&bookingLink(campground);
@@ -741,6 +728,7 @@
   }
   function playPreview(state,selectedStop=null) {
     if(!state.map) return;
+    if(!state.roads?.every(leg=>leg?.length>1)){state.key.textContent="Load the road route before playing. Use Retry road route if loading failed.";return;}
     state.select(null);
     const stops=state.route.flatMap((point,index)=>point?[{point,index}]:[]);
     if(stops.length<2) return;
@@ -857,24 +845,27 @@
     if(!preview.paused&&!preview.done) preview.frame=requestAnimationFrame(tick);
   }
   async function loadRoads(state,control){
-    if(state.trip.privacy!=="public"||state.route.some(p=>!p)) return;
+    if(state.route.some(p=>!p)||state.loadingRoads) return;
+    state.loadingRoads=true;
+    state.play.disabled=true;state.jump.disabled=true;
     control.disabled=true;
     state.key.textContent="Loading the driving route...";
     try {
       const coords=state.route.map(([lat,lon])=>lon+","+lat).join(";");
       const response=await fetch("https://routing.openstreetmap.de/routed-car/route/v1/driving/"+coords+
-        "?overview=false&steps=true&geometries=geojson",{signal:state.abort.signal});
+        "?overview=false&steps=true&geometries=geojson",{signal:AbortSignal.any([state.abort.signal,AbortSignal.timeout(45000)])});
       if(!response.ok) throw Error("Road routing unavailable.");
       const json=await response.json();
       const legs=json.routes?.[0]?.legs;
       if(legs?.length!==state.route.length-1) throw Error("Road routing did not return all legs.");
       if(active!==state) return;
       state.roads=legs.map(leg=>leg.steps.flatMap(step=>step.geometry.coordinates.map(([lon,lat])=>[lat,lon])).filter(Boolean)).map(leg=>leg.length>1?leg:null);
+      if(state.roads.some(leg=>!leg)) throw Error("Incomplete road route.");
       if(!state.preview) drawWalk(state);
       control.hidden=true;
     } catch(error){
-      if(active===state) state.key.textContent="Road routing is unavailable. The dashed stop connections are still visible.";
-    } finally {control.disabled=false;}
+      if(active===state) state.key.textContent="Road routing is unavailable. Dashed lines are only stop connections; playback is unavailable. Retry road route in Navigate & route options.";
+    } finally {state.loadingRoads=false;control.disabled=false;control.textContent="Retry road route";state.play.disabled=!state.roads?.every(leg=>leg?.length>1);state.jump.disabled=state.play.disabled;}
   }
   window.closeNptWalk=()=>{
     if(!active) return;
@@ -967,7 +958,8 @@
       drawWalk(state);
       fullTrip.disabled=state.route.filter(Boolean).length<2;
       jump.disabled=fullTrip.disabled;
-      roads.hidden=trip.privacy!=="public"||state.route.some(p=>!p);
+      roads.hidden=state.route.some(p=>!p)||Boolean(state.roads);
+      if(!state.roads&&!state.route.some(p=>!p)) await loadRoads(state,roads);
       if(state.route.some(p=>!p)) key.textContent="Some route stops do not have map coordinates.";
     } catch(error){
       key.textContent="The interactive map could not load.";
@@ -977,3 +969,4 @@
     }
   };
 })();
+

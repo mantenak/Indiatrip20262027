@@ -5,6 +5,7 @@ const pt=x=>Array.isArray(x)&&x.length===2&&x.every(Number.isFinite)?x:null;
 function miles(a,b){if(!pt(a)||!pt(b))return Infinity;const r=Math.PI/180,dlat=(b[0]-a[0])*r,dlon=(b[1]-a[1])*r;return 3958.76*2*Math.asin(Math.min(1,Math.sqrt(Math.sin(dlat/2)**2+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(dlon/2)**2)));}
 const point=p=>[Number(p.latitude),Number(p.longitude)];
 function chooseParks(parks,start,end,days,hours,distance=250){
+ hours=hours||Math.max(1,distance/45);
  const max=Math.min(12,Math.max(1,Math.floor((days-1)/3))),budget=Math.max(hours,days*hours*.45),chosen=[];let current=start,spent=0;
  const remaining=parks.filter(p=>p.latitude!=null&&p.longitude!=null&&miles(start,point(p))<days*hours*30);
  while(chosen.length<max){
@@ -16,7 +17,7 @@ function chooseParks(parks,start,end,days,hours,distance=250){
  return chosen;
 }
 function fit(c,vehicle){
- const trailer=['fifthWheel','trailer'].includes(vehicle.type),length=Number(vehicle.rvLength)||0;
+ const trailer=['fifthWheel','trailer','travelTrailer'].includes(vehicle.type),length=Number(vehicle.rvLength)||0;
  if(vehicle.type==='car')return {ok:true,unknown:false,label:'Confirm tent-site availability'};
  const allowed=trailer?c.trailer_allowed:c.rv_allowed,limit=Number(trailer?c.max_trailer_length_ft:c.max_rv_length_ft)||null;
  if(allowed===false||limit&&length>limit)return {ok:false,unknown:false,label:'Does not fit selected equipment'};
@@ -40,3 +41,4 @@ function buildTrip(model){
 }
 const api={miles,point,chooseParks,fit,hookups,buildTrip};root.NptPlannerCore=api;if(typeof module!=='undefined')module.exports=api;
 })(typeof window==='undefined'?globalThis:window);
+
