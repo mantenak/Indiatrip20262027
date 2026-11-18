@@ -209,7 +209,7 @@
       if(!route[i-1]||!route[i]) continue;
       const road=state.roads?.[i-1];
       const selected=hasDrive&&i===segmentIndex;
-      L.polyline(road||[route[i-1],route[i]],{color:selected?"#a64f24":"#285c49",weight:selected?6:3,opacity:full||selected?0.88:0.28,dashArray:road?null:"6 6"}).addTo(state.layers);
+      if(road)L.polyline(road,{color:selected?"#a64f24":"#285c49",weight:selected?6:3,opacity:full||selected?0.88:0.28,dashArray:road?null:"6 6"}).addTo(state.layers);
     }
     const lastIndex=route.length-1;
     const loop=route[0]&&route[lastIndex]&&route[0].every((value,index)=>value===route[lastIndex][index]);
@@ -241,7 +241,7 @@
     });
     const bounds=full?(state.roads?.flat()||route.filter(Boolean)):hasDrive&&previous&&destination?(state.roads?.[segmentIndex-1]||[previous,destination]):destination?[destination]:[];
     if(bounds.length) map.fitBounds(bounds,{padding:[28,28],maxZoom:full?9:13});
-    key.textContent=state.roads?"Road routing uses a standard driving profile. RV clearance and access are unverified. Dashed lines show approximate connections.":"Dashed lines connect approximate stops. They do not show the roads to drive.";
+    key.textContent=state.roads?"Road routing uses a standard driving profile. RV clearance and access are unverified.":"Loading roads. Only stop markers are shown until routing is available.";
     panel.replaceChildren();
     if(full){
       drawOverviewAttractions(state);
@@ -885,7 +885,7 @@
       if(!state.preview) drawWalk(state);
       control.hidden=true;
     } catch(error){
-      if(active===state) state.key.textContent="Road routing is unavailable. Dashed lines are only stop connections; playback is unavailable. Retry road route in Navigate & route options.";
+      if(active===state) state.key.textContent="Road routing is unavailable. Only stop markers are shown; playback is unavailable. Retry road route in Navigate & route options.";
     } finally {state.loadingRoads=false;control.disabled=false;control.textContent="Retry road route";state.play.disabled=!state.roads?.every(leg=>leg?.length>1);state.jump.disabled=state.play.disabled;}
   }
   window.closeNptWalk=()=>{
