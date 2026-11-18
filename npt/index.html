@@ -220,7 +220,7 @@ function showTrip(t,isOwner){
  $("#vName").textContent=t.name;$("#vMeta").textContent=fmtDate(t.startDate)+" · "+t.length+" days · "+t.startLocation+" → "+t.endLocation;
  $("#vStart").textContent=fmtDate(t.startDate)+" from "+t.startLocation;$("#vLength").textContent=t.length+" days";$("#vVehicle").textContent=vehicleLabel(t.vehicle.type)+(t.vehicle.model?" · "+t.vehicle.model:"");
  $("#vCamping").textContent=t.preferences.campground+(t.preferences.fhuCadence?" · FHU about every "+t.preferences.fhuCadence+" days":"");
- $("#vDriving").textContent="Up to "+t.preferences.maxDriveHours+" hr/day · "+t.preferences.pace;
+ $("#vDriving").textContent=(t.preferences.preferredDriveMiles?t.preferences.preferredDriveMiles+" preferred mi between stops · ":"")+(t.preferences.maxDriveHours?"Up to "+t.preferences.maxDriveHours+" hr/day · ":"")+t.preferences.pace;
  $("#vParks").innerHTML=t.parks.map(p=>'<span class="chip">'+esc(p)+'</span>').join("");
  $("#ownerShare").style.display=isOwner?"block":"none";$("#copyTripBtn").style.display=isOwner?"none":"inline-block";
  if(isOwner){$("#shareStatus").textContent=t.privacy==="link"?"This trip can be shared by link.":"This trip is private.";$("#shareExplain").textContent=t.privacy==="link"?"Anyone with the link can view and copy it.":"Trip data stays in this browser unless you create a share link.";$("#shareBtn").onclick=()=>createShareLink(t)}
