@@ -42,8 +42,8 @@
 .homeactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .topactions #nptAccountBtn{display:block}
 </style>
-<link rel="stylesheet" href="./trip-views.css">
-<link rel="stylesheet" href="./planner.css?v=destination-road-4">
+<link rel="stylesheet" href="./trip-views.css?v=stop-editor-5">
+<link rel="stylesheet" href="./planner.css?v=stop-editor-5">
 </head>
 <body>
 <div class="app">
@@ -335,9 +335,10 @@ const isAuthCallback = /[?&](code|error|error_code)=/.test(location.search)
 if (!isAuthCallback && !checkShared() && !location.hash.startsWith("#public=") && !location.hash.startsWith("#unlisted=")) showHome();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.76.1" defer></script>
-<script src="./trip-views.js?v=destination-road-4" defer></script>
-<script src="./cloud.js?v=destination-road-4" defer></script>
-<script src="./planner-core.js?v=destination-road-4" defer></script>
-<script src="./planner.js?v=destination-road-4" defer></script>
+<script src="./trip-views.js?v=stop-editor-5" defer></script>
+<script src="./cloud.js?v=stop-editor-5" defer></script>
+<script src="./planner-core.js?v=stop-editor-5" defer></script>
+<script src="./planner.js?v=stop-editor-5" defer></script>
 </body>
 </html>
+

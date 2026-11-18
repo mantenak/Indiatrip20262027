@@ -253,7 +253,12 @@
     return data.id;
   }
   window.startWizard = function() { if(!db) return alert("NPT Cloud is unavailable."); if(!user)return showAuth();if(window.openNptPlanner)window.openNptPlanner();else oldStartWizard();};
-  window.nptCloud={db,signedIn:()=>Boolean(user),saveProposal:async (proposal,existing)=>{
+  window.nptCloud={db,signedIn:()=>Boolean(user),ownsTrip:t=>Boolean(user&&mine.some(x=>x.id===t.id)),editorSource:t=>{
+      const copy=JSON.parse(JSON.stringify(t));
+      for(const segment of copy.segments||[]){if(!segment.mapPoint){const match=publicTrips.flatMap(x=>x.segments||[]).find(s=>s.campground===segment.campground&&s.park===segment.park&&s.mapPoint);if(match)segment.mapPoint=match.mapPoint;}}
+      const match=publicTrips.find(x=>x.startLocation===copy.startLocation&&x.endLocation===copy.endLocation);
+      copy.preferences={...copy.preferences,mapStart:copy.preferences?.mapStart||match?.preferences?.mapStart,mapEnd:copy.preferences?.mapEnd||match?.preferences?.mapEnd};return copy;
+    },saveProposal:async (proposal,existing)=>{
     if(!user)throw Error("Sign in before saving your trip.");
     if(!existing)return savePayload(proposal,"private");
     if(!mine.some(t=>t.id===existing.id)||!existing.updatedAt)throw Error("Reopen this trip from My Trips before editing.");
@@ -298,14 +303,14 @@
     oldShowTrip(t,isOwner);
     $("#nptTripMapButton")?.remove();
     $("#nptEditProposal")?.remove();
-    if(t.preferences?.planner){
+    if(t.segments?.length){
       const preview=document.createElement("button");preview.className="btn primary";preview.id="nptTripMapButton";preview.textContent="Preview Drive";preview.onclick=()=>window.openNptWalk(t);$("#viewer .viewerbar").append(preview);
-      if(isOwner){const edit=document.createElement("button");edit.className="btn";edit.id="nptEditProposal";edit.textContent="Edit itinerary";edit.onclick=()=>window.editNptProposal(t);$("#viewer .viewerbar").append(edit);}
+      if(isOwner){const edit=document.createElement("button");edit.className="btn";edit.id="nptEditProposal";edit.textContent="Edit stops & itinerary";edit.onclick=()=>window.editNptProposal(t);$("#viewer .viewerbar").append(edit);}
     }
     const publicMap=t.privacy==="public"?t:isOwner?publicTrips.find(trip=>
       t.name.replace(/ — restored draft$/,"")===trip.name&&t.length===trip.length
     ):null;
-    if(publicMap?.days.length&&!t.preferences?.planner){
+    if(publicMap?.days.length&&!t.segments?.length){
       const button=document.createElement("button");
       button.id="nptTripMapButton";
       button.className="btn primary";
@@ -517,3 +522,4 @@
   }
   init().catch(displayError);
 })();
+

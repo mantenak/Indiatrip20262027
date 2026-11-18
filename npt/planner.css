@@ -6,3 +6,7 @@
 .npt-planner{z-index:2000;isolation:isolate}.npt-walk-map{isolation:isolate}
 
 .np-status:not(:empty){padding:12px 16px;background:#fff0cf;border:1px solid #dcc38c;border-radius:8px;font-weight:600;color:#573f18}
+
+
+/* One baseline and a consistent height for preview actions. */
+.npt-walk-nav{align-items:flex-end!important}.npt-walk-nav>.btn,.npt-preview-primary>.btn,.npt-preview-control select{height:42px;min-height:42px;box-sizing:border-box;border-radius:9px}.npt-preview-control select{border:1px solid #bcc9c2;background:white;font:inherit;font-size:14px;color:#173c32}.npt-preview-primary{flex:1 1 360px;align-items:flex-end}.npt-preview-options>summary{height:42px;display:flex;align-items:center;padding:0 8px}.npt-preview-options>summary::before{content:'▸';margin-right:7px}.npt-preview-options[open]>summary::before{content:'▾'}.npt-walk-panel h3{margin-top:0}.npt-leg-summary{padding:12px;background:#edf3ed;border-radius:10px;margin-bottom:14px}.npt-leg-summary h3{font-size:19px}.npt-leg-summary dd{font-weight:600}.npt-leg-summary small{display:block;color:#65736c;font-size:11px;margin-top:10px}.npt-leg-row{border-bottom:1px solid #d8ddd8;padding-bottom:10px}.npt-leg-row .btn{width:100%}.npt-leg-row p{margin:4px 2px;font-size:12px;color:#65736c}

@@ -247,10 +247,15 @@
       drawOverviewAttractions(state);
       panel.append(el("h3","Entire itinerary"),el("p",`${trip.days.length} days · ${trip.segments.length} stops`));
       const dayList=el("div",undefined,{style:"display:grid;gap:6px"});
-      getStays(trip).forEach(stay=>{
-        const day=button(`Day ${stay.first+1} · ${stay.name}`,()=>state.select(stay.first));
+      trip.segments.forEach((segment,i)=>{
+        const matched=trip.days.map((d,index)=>({d,index})).filter(x=>String(x.d.segmentNumber)===String(segment.sequence));
+        const stay={name:segment.campground||segment.park||segment.location,first:matched[0]?.index??0,last:matched.at(-1)?.index??0};
+        const previous=i?trip.segments[i-1].campground||trip.segments[i-1].park:trip.startLocation;
+        const day=button(`${i===0?"Start":"Stop "+i} → Stop ${i+1} · ${stay.name}`,()=>{state.mode="details";state.modeControl.value="details";state.jump.hidden=false;playPreview(state,i+1);});
         day.style.textAlign="left";
-        dayList.append(day);
+        const row=el("section",undefined,{class:"npt-leg-row"});
+        row.append(day,el("p",`${previous} → ${stay.name}`),el("p",`Days ${stay.first+1}–${stay.last+1} · ${segment?.nights||stay.last-stay.first+1} nights`));
+        dayList.append(row);
       });
       panel.append(dayList);
       return;
@@ -676,13 +681,25 @@
     }
     loadStopPhotos(state,entries);
   }
+  function legDetails(state,index,arrived=false){
+    const trip=state.trip,segment=trip.segments[index-1],from=index===1?trip.startLocation:trip.segments[index-2]?.campground||trip.segments[index-2]?.park;
+    const to=segment?.campground||segment?.park||trip.endLocation;
+    const leg=state.roadStats?.[index-1]||trip.preferences?.planner?.route?.legs?.[index-1];
+    const final=trip.days.at(-1),miles=leg?Math.round(leg.distance/1609.344):segment?.driveMiles??(index===state.route.length-1?final?.driveMiles:null);
+    const minutes=leg?Math.round(leg.duration/60):segment?.driveMinutes??(index===state.route.length-1?final?.driveMinutes:null);
+    const box=el("section",undefined,{class:"npt-leg-summary"});
+    box.append(el("h3",`${index===1?"Start":"Stop "+(index-1)} → ${index===state.route.length-1?"Return":"Stop "+index}`),el("p",(arrived?"Arrived at ":"Driving to ")+to));
+    const fields=el("dl",undefined,{class:"npt-stay-fields"});dataRow(fields,"From",from);dataRow(fields,"To",to);dataRow(fields,"Road distance",miles!=null?miles+" mi":"Not calculated");dataRow(fields,"Driving time",minutes!=null?Math.floor(minutes/60)+" hr "+minutes%60+" min":"Not calculated");
+    dataRow(fields,"Stay",segment?.nights?segment.nights+" nights":null);dataRow(fields,"Hookups",segment?.hookups);
+    box.append(fields,el("small","Driving estimate excludes breaks. Check RV restrictions and seasonal access."));return box;
+  }
   function previewHighlights(state,stop,showOnMap=false) {
     const {trip,panel}=state;
     const segment=trip.segments[stop.index-1];
     const days=segment?trip.days.filter(day=>String(day.segmentNumber)===String(segment.sequence)):[];
     const title=stop.index===0?trip.startLocation:segment?.park||segment?.location||trip.endLocation;
     const stopTitle=previewStopTitle(state,stop);
-    panel.replaceChildren(el("h3",stopTitle));
+    panel.replaceChildren(...(stop.index>0?[legDetails(state,stop.index,true)]:[el("h3","Departure · "+stopTitle)]));
     if(title&&title!==stopTitle) panel.append(el("p",title));
     if(segment?.location&&segment.location!==title&&segment.location!==stopTitle) panel.append(el("p",segment.location));
     if(segment?.nights) panel.append(el("p",segment.nights+(segment.nights===1?" night":" nights")));
@@ -786,6 +803,9 @@
       if(state.preview!==preview||preview.paused) return;
       const from=stops[preview.index], to=stops[preview.index+1];
       if(preview.newLeg){
+        state.panel.replaceChildren(legDetails(state,to.index));
+        const arriving=state.trip.segments[to.index-1];
+        if(arriving){const cg=findDetailedCampground(state.trip,arriving),ds=state.trip.days.filter(d=>String(d.segmentNumber)===String(arriving.sequence));const facts=el("dl",undefined,{class:"npt-stay-fields"});detailedStopFacts(state.trip,arriving,ds,cg).filter(([label])=>["Stay","Listed RV limit"].includes(label)).forEach(([label,value])=>dataRow(facts,label,value));state.panel.append(facts);if(cg?.reservationNotes)state.panel.append(el("h4","Booking notes"),el("p",cg.reservationNotes));const highlights=[...new Set(ds.flatMap(d=>d.activities||[]))];if(highlights.length){const ul=el("ul");highlights.slice(0,5).forEach(a=>ul.append(el("li",typeof a==="string"?a:a.name)));state.panel.append(el("h4","At this stop"),ul);}}
         const road=to.index===from.index+1?state.roads?.[from.index]:null;
         preview.points=road?[from.point,...road,to.point]:[from.point,to.point];
         preview.sample=previewLeg(preview.points);
@@ -859,6 +879,7 @@
       const legs=json.routes?.[0]?.legs;
       if(legs?.length!==state.route.length-1) throw Error("Road routing did not return all legs.");
       if(active!==state) return;
+      state.roadStats=legs.map(leg=>({distance:leg.distance,duration:leg.duration}));
       state.roads=legs.map(leg=>leg.steps.flatMap(step=>step.geometry.coordinates.map(([lon,lat])=>[lat,lon])).filter(Boolean)).map(leg=>leg.length>1?leg:null);
       if(state.roads.some(leg=>!leg)) throw Error("Incomplete road route.");
       if(!state.preview) drawWalk(state);
@@ -912,7 +933,7 @@
     speed.append(el("option","0.5× speed",{value:"0.5"}),el("option","Normal speed",{value:"1"}),el("option","2× speed",{value:"2"}),el("option","4× speed",{value:"4"}));
     speed.value="1";
     speed.onchange=()=>{state.speed=Number(speed.value);};
-    const state={root,trip,key,panel,pause,play:fullTrip,overview,jump,continueStop,dwellStatus,mode:"overview",speed:1,dayIndex:null,abort:new AbortController(),
+    const state={root,trip,key,panel,pause,play:fullTrip,overview,jump,continueStop,dwellStatus,modeControl:mode,mode:"overview",speed:1,dayIndex:null,abort:new AbortController(),
       route:[point(trip.preferences?.mapStart),...trip.segments.map(s=>point(s.mapPoint)),point(trip.preferences?.mapEnd)],
       select(index){
         stopPreview(state);
@@ -934,7 +955,7 @@
     };
     jump.onchange=()=>{if(jump.value!=="") playPreview(state,Number(jump.value));};
     select.onchange=()=>state.select(select.value===""?null:Number(select.value));
-    const back=button("Back to trip",()=>trip.__remote&&window.nptCanEdit?.()?window.openTrip(trip.id):window.showHome());
+    const back=button("Back to trip",()=>window.nptCloud?.ownsTrip(trip)?window.openTrip(trip.id):window.showTrip(trip,false));
     const primary=el("div",undefined,{class:"npt-preview-primary"});
     function labeled(text,control){const label=el("label",undefined,{class:"npt-preview-control"});label.append(el("span",text),control);return label;}
     primary.append(labeled("View",mode),fullTrip,pause,continueStop,labeled("Speed",speed));
@@ -942,7 +963,10 @@
     extra.append(el("summary","Navigate & route options"));
     const secondary=el("div",undefined,{class:"npt-preview-secondary"});
     secondary.append(overview,jump,prev,next,select,roads);extra.append(secondary);
-    nav.append(back,primary,extra,dwellStatus);
+    const owner=window.nptCloud?.ownsTrip(trip);
+    const edit=button(owner?"Edit stops & itinerary":"Copy & edit",()=>{stopPreview(state);if(owner)window.editNptProposal(trip);else window.copySharedTrip(trip);});
+    edit.hidden=!owner&&trip.allowCopy===false;
+    nav.append(back,edit,primary,extra,dwellStatus);
     layout.append(mapNode,panel);
     const legend=el("p","⛺ Campground   ◆ Attraction or park   • Route stop   ⚑ Trip endpoint",{class:"npt-map-key"});
     root.append(title,nav,layout,legend,key);
@@ -969,4 +993,5 @@
     }
   };
 })();
+
 
