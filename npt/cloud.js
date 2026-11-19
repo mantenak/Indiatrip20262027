@@ -7,7 +7,7 @@
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const clean = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-  let user = null, mine = [], publicTrips = [], loaded = false, lastViewed = null;
+  let user = null, mine = [], publicTrips = [], loaded = false, lastViewed = null, catalogAdmin = false;
   const oldStartWizard = window.startWizard;
   const oldShowTrip = window.showTrip;
   const oldShowHome = window.showHome;
@@ -110,6 +110,7 @@
     $(".topactions").append(accountButton);
     $("#nptMyTrips").onclick=()=>gated("mine");
     $("#nptNewTrip").onclick=()=>gated("new");
+    if($("#nptCatalogButton"))$("#nptCatalogButton").onclick=()=>window.openNptCatalogManager?.();
     $(".npt-brand").onclick=()=>{window.closeNptWalk?.();homeMode("public");};
     const home = $("#home");
     home.insertAdjacentHTML("beforeend", `<div class="accountbar"><span id="cloudStatus">Loading NPT...</span></div>
@@ -175,11 +176,22 @@
       if(created.error)displayError(created.error);
     }
   }
+  async function refreshCatalogAdminAccess() {
+    const button=$("#nptCatalogButton");
+    if(!user){catalogAdmin=false;if(button)button.hidden=true;window.dispatchEvent(new CustomEvent("npt-catalog-access",{detail:{admin:false}}));return;}
+    const {data,error}=await db.from("npt_catalog_admins").select("user_id").eq("user_id",user.id).maybeSingle();
+    catalogAdmin=!error&&Boolean(data);
+    if(button)button.hidden=!catalogAdmin;
+    window.dispatchEvent(new CustomEvent("npt-catalog-access",{detail:{admin:catalogAdmin}}));
+  }
   function updateUI() {
     if(!user && tripHome==="mine") homeMode("public");
+    if(!user)catalogAdmin=false;
+    const catalogButton=$("#nptCatalogButton");if(catalogButton)catalogButton.hidden=!catalogAdmin;
     $("#nptAccountBtn").textContent=user?"Sign Out":"Sign In";
     message(user ? "Signed in as "+(user.email||"NPT user")+" · your trips are saved privately in the cloud" : "Browsing as a guest · sign in when you're ready to create a trip");
     window.renderTrips();
+    refreshCatalogAdminAccess().catch(()=>{catalogAdmin=false;if(catalogButton)catalogButton.hidden=true;});
   }
   async function refreshMine() {
     if(!user){mine=[];window.renderTrips();return;}
@@ -253,7 +265,7 @@
     return data.id;
   }
   window.startWizard = function() { if(!db) return alert("NPT Cloud is unavailable."); if(!user)return showAuth();if(window.openNptPlanner)window.openNptPlanner();else oldStartWizard();};
-  window.nptCloud={db,signedIn:()=>Boolean(user),ownsTrip:t=>Boolean(user&&mine.some(x=>x.id===t.id)),editorSource:t=>{
+  window.nptCloud={db,signedIn:()=>Boolean(user),currentUser:()=>user,isCatalogAdmin:()=>catalogAdmin,ownsTrip:t=>Boolean(user&&mine.some(x=>x.id===t.id)),editorSource:t=>{
       const copy=JSON.parse(JSON.stringify(t));
       for(const segment of copy.segments||[]){if(!segment.mapPoint){const match=publicTrips.flatMap(x=>x.segments||[]).find(s=>s.campground===segment.campground&&s.park===segment.park&&s.mapPoint);if(match)segment.mapPoint=match.mapPoint;}}
       const match=publicTrips.find(x=>x.startLocation===copy.startLocation&&x.endLocation===copy.endLocation);
