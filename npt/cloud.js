@@ -304,8 +304,9 @@
     $("#nptTripMapButton")?.remove();
     $("#nptEditProposal")?.remove();
     if(t.segments?.length){
-      const preview=document.createElement("button");preview.className="btn primary";preview.id="nptTripMapButton";preview.textContent="Preview Drive";preview.onclick=()=>window.openNptWalk(t);$("#viewer .viewerbar").append(preview);
-      if(isOwner){const edit=document.createElement("button");edit.className="btn";edit.id="nptEditProposal";edit.textContent="Edit stops & itinerary";edit.onclick=()=>window.editNptProposal(t);$("#viewer .viewerbar").append(edit);}
+      const actions=$("#viewer .viewerbar-actions")||$("#viewer .viewerbar");
+      const preview=document.createElement("button");preview.className="btn primary";preview.id="nptTripMapButton";preview.textContent="Preview Drive";preview.onclick=()=>window.openNptWalk(t);actions.append(preview);
+      if(isOwner){const edit=document.createElement("button");edit.className="btn";edit.id="nptEditProposal";edit.textContent="Edit trip";edit.onclick=()=>window.editNptProposal(t);actions.append(edit);}
     }
     const publicMap=t.privacy==="public"?t:isOwner?publicTrips.find(trip=>
       t.name.replace(/ — restored draft$/,"")===trip.name&&t.length===trip.length
@@ -316,7 +317,7 @@
       button.className="btn primary";
       button.textContent=t.privacy==="public"?"Preview Drive":"Preview public drive";
       button.onclick=()=>openPublicMap(publicMap);
-      $("#viewer .viewerbar").append(button);
+      ($("#viewer .viewerbar-actions")||$("#viewer .viewerbar")).append(button);
     }
     if(!isOwner){
       $("#copyTripBtn").style.display=t.allowCopy===false?"none":"inline-block";
@@ -424,7 +425,15 @@
       const {error}=await db.from("npt_trips").update({visibility:vis,updated_at:new Date().toISOString()}).eq("id",t.id).eq("owner_id",user.id);
       if(error)throw error;
       await refreshMine(); await refreshPublic();
-      window.openTrip(t.id);
+      t.updatedAt=mine.find(item=>item.id===t.id)?.updatedAt||t.updatedAt;
+      t.privacy=vis;
+      if(document.querySelector(".npt-planner #ownerShare")){
+        $("#vPrivacy").textContent=vis==="private"?"PRIVATE TRIP":vis==="public"?"PUBLIC TRIP":"SHARE LINK ENABLED";
+        $("#nptTripVisibility").value=vis;
+        $("#shareBtn").disabled=vis==="private";
+        $("#shareStatus").textContent=vis==="private"?"This trip is private.":vis==="public"?"This trip is public.":"This trip can be shared by link.";
+        $("#shareExplain").textContent=vis==="private"?"Only you can access this trip after signing in.":vis==="public"?"Anyone can browse this itinerary in Explore Trips.":"Anyone with the unlisted link can view this trip.";
+      }else window.openTrip(t.id);
       message("Privacy saved: "+vis+".");
     }catch(e){alert("Privacy update failed: "+e.message);}
     finally{b.disabled=false;}
