@@ -4,9 +4,9 @@ Built 2026-11-17 in the existing NPT Supabase project. Additive changes only; no
 
 ## Coverage at import
 - 475 NPS unit records, including 62 national-park records representing 63 parks (Sequoia and Kings Canyon share one NPS unit).
-- 3,909 state-park inventory entries grouped by normalized name and state from 6,670 PAD-US 4.1 parcels across 52 state/territory codes. These are source inventory groups, not an independently verified park count.
+- 3,909 state-park inventory entries grouped by normalized name and state from 6,670 PAD-US 4.1 parcels across 52 state/territory codes. These are source inventory groups, not an independently verified park count. Five Florida state-park campgrounds have now been enriched from official park pages.
 - Banff National Park.
-- 741 campgrounds currently in the database: 665 from NPS, 14 Banff frontcountry campgrounds, 3 KOA, and 59 Sun Outdoors. KOA and Sun Outdoors coverage is still a sample, not a nationwide import.
+- 746 campgrounds currently in the database: 665 from NPS, 14 Banff frontcountry campgrounds, 3 KOA, 59 Sun Outdoors, and 5 Florida state-park campgrounds. Private-chain coverage is still a sample, not a nationwide import.
 - 3,717 attraction/activity-to-park associations: 3,464 distinct NPS activity IDs and 11 Banff attractions. 112 of the 3,576 downloaded NPS activity records had no matching related park and were not imported.
 - 8,665 photo references, retaining available source captions and credits. URLs have not all been individually tested. Photos remain remote; rights are not implied by their presence in an agency feed.
 - Individual campsite table is ready but empty.
@@ -26,9 +26,20 @@ Distance is geographic straight-line distance, NOT road miles or driving time. P
 State-park points are largest-parcel centroids, not entrances. Banff campground points are centers of the official embedded maps, not confirmed gate coordinates. Banff attraction coordinates are pending. Do not route vehicles to these points as verified entrances.
 
 ## Known gaps
-Private campground coverage is incomplete: KOA (3 records) and Sun Outdoors (59 records) are samples, and the other registered operators have not yet been imported. Most state campground details, individual campsites, exhaustive attraction coverage, verified entrance points, live reservation inventory, current security-incident research and individually curated best-photo order remain incomplete. Security review and availability default to unknown. A source snapshot does not establish the absence of incidents or a campsite being available.
+Private campground coverage is incomplete: KOA (3 records) and Sun Outdoors (59 records) are samples, and the other registered operators have not yet been imported. Florida has five campground-level records; most state campground details and all individual campsite records remain incomplete. Exact coordinates, site-specific fees, live reservation inventory, exhaustive attraction coverage, verified entrance points, current security-incident research and individually curated best-photo order also remain incomplete. Security review and availability default to unknown. A source snapshot does not establish the absence of incidents or a campsite being available.
 
 Banff operational dates are explicitly dated 2026 and must not be projected into 2028. NPS calendars also contain date-specific exceptions. Unknown data should be visible to travelers and must not be converted to false assurance.
+
+## State-park campground enrichment: first import
+Five Florida State Parks campground records were added from official park pages: Blue Hole at Florida Caverns, Highlands Hammock Family Campground, John Pennekamp, Ochlockonee River, and St. Andrews. The import captures published RV limits, hookup information, site counts or site-group differences, and direct park and reservation links where available. Unknown values remain null. It does not create fictional individual-site records from campground-level summaries; `npt_campsites` remains empty until the official reservation pages provide individual site identifiers and attributes. Coordinates and park-specific prices are also pending verification.
+
+Source pages:
+- [Florida Caverns](https://www.floridastateparks.org/parks-and-trails/florida-caverns-state-park/experiences-amenities)
+- [Highlands Hammock](https://www.floridastateparks.org/parks-and-trails/highlands-hammock-state-park/experiences-amenities)
+- [John Pennekamp](https://www.floridastateparks.org/parks-and-trails/john-pennekamp-coral-reef-state-park/experiences-amenities)
+- [Ochlockonee River](https://www.floridastateparks.org/parks-and-trails/ochlockonee-river-state-park/experiences-amenities)
+- [St. Andrews](https://www.floridastateparks.org/parks-and-trails/st-andrews-state-park/experiences-amenities-0)
+- [Florida State Parks reservations](https://reserve.floridastateparks.org/Web/Activities/PlanYourVisit.aspx)
 
 ## Private campground discovery sources
 The following official operator directories are registered in `npt_catalog_sources` and `sources.sql` as starting points for an on-demand catalog refresh:
