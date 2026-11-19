@@ -27,3 +27,5 @@
 .np-drive-cell{display:flex;flex-direction:column;gap:2px;line-height:1.15}.np-drive-cell strong{font-size:12px}.np-limit-badge{display:block;color:#912e22;font-size:10px;font-weight:800;line-height:1.2;white-space:normal}.np-list-stop-overlimit .np-list-grid{background:#fff2ec;border-left:4px solid #b54436}.np-list-stop-overlimit .np-over-limit strong{color:#912e22}.np-limit-alert~.np-plan-tools .np-add-control{flex-wrap:wrap}
 .np-trip-parameters{margin:0 0 12px;padding:10px 12px;background:#f5f8f2;border:1px solid #cbd8ce;border-radius:10px}.np-trip-parameters>summary{cursor:pointer;font-weight:750;color:#173c32}.np-trip-parameters>p{margin:5px 0 10px}.np-param-grid{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:12px}.np-param-grid .np-field input{max-width:220px}
 @media(max-width:650px){.np-param-grid{grid-template-columns:1fr}}
+
+.np-address-search{margin:10px 0;padding:10px;background:#fffdf8;border:1px solid #cbd8ce;border-radius:8px}.np-address-search>.btn{margin-top:8px}
