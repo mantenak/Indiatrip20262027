@@ -8,12 +8,15 @@ def num(s):
 def pos(s):
  n=num(s);return n if n and n>0 else None
 def boolean(s):return {'1':True,'0':False,'true':True,'false':False}.get(str(s).lower())
-def duration_minutes(raw):
+def duration_bounds(raw):
  m=re.fullmatch(r'\\s*(\\d+)(?:\\s*-\\s*(\\d+))?\\s*(minutes?|hours?)\\s*',raw or '',re.I)
  if not m:return None
  lo=int(m.group(1));hi=int(m.group(2) or m.group(1));factor=60 if m.group(3).lower().startswith('hour') else 1
  if lo<=0 or hi<=0:return None
- return round((lo+hi)*factor/2)
+ return (lo*factor,hi*factor)
+def duration_minutes(raw):
+ bounds=duration_bounds(raw)
+ return round(sum(bounds)/2) if bounds else None
 def lit(x):return "'"+json.dumps(x,ensure_ascii=False).replace("'","''")+"'::jsonb"
 def batch(name,rows,sql,n=100):
  for i in range(0,len(rows),n): (OUT/(name+'-'+str(i//n).zfill(3)+'.sql')).write_text(sql.replace('__DATA__',lit(rows[i:i+n])))
@@ -40,7 +43,7 @@ for file in [ROOT/'npt-thingstodo.json']+sorted(ROOT.glob('npt-thingstodo-*.json
   for p in a.get('relatedParks',[]):
    code=p['parkCode']
    if code not in codes:continue
-   attrs.append(dict(name=a['title'],park=code,source_record_id=a['id'],description=txt(a.get('shortDescription')),latitude=num(a.get('latitude')),longitude=num(a.get('longitude')),official_url=a.get('url'),duration_minutes=duration_minutes(a.get('duration')),accessibility={'information':txt(a.get('accessibilityInformation'))},seasonality={'seasons':a.get('season',[]),'description':txt(a.get('seasonDescription'))},metadata={k:a.get(k) for k in ['duration','durationDescription','activities','tags','location','locationDescription','isReservationRequired','reservationDescription','doFeesApply','feeDescription','petsDescription','arePetsPermitted','arePetsPermittedWithRestrictions','timeOfDay','ageDescription']} | ({'duration_minutes_range':{'min':duration_minutes(a.get('duration')) if duration_minutes(a.get('duration')) else None,'max':duration_minutes(a.get('duration')) if duration_minutes(a.get('duration')) else None,'source_text':a.get('duration'),'method':'midpoint of official NPS duration range; estimate for itinerary planning'}} if duration_minutes(a.get('duration')) else {})));pics(a,'attraction',a['id'],code)
+   attrs.append(dict(name=a['title'],park=code,source_record_id=a['id'],description=txt(a.get('shortDescription')),latitude=num(a.get('latitude')),longitude=num(a.get('longitude')),official_url=a.get('url'),duration_minutes=duration_minutes(a.get('duration')),accessibility={'information':txt(a.get('accessibilityInformation'))},seasonality={'seasons':a.get('season',[]),'description':txt(a.get('seasonDescription'))},metadata={k:a.get(k) for k in ['duration','durationDescription','activities','tags','location','locationDescription','isReservationRequired','reservationDescription','doFeesApply','feeDescription','petsDescription','arePetsPermitted','arePetsPermittedWithRestrictions','timeOfDay','ageDescription']} | ({'duration_minutes_range':{'min':duration_bounds(a.get('duration'))[0],'max':duration_bounds(a.get('duration'))[1],'source_text':a.get('duration'),'method':'official NPS range converted to minutes; midpoint stored for itinerary planning'}} if duration_bounds(a.get('duration')) else {})));pics(a,'attraction',a['id'],code)
 fields='name text,park text,source_record_id text,description text,latitude float8,longitude float8,official_url text,duration_minutes int,accessibility jsonb,seasonality jsonb,metadata jsonb';cols=[f.split()[0] for f in fields.split(',') if not f.startswith('park ')]
 batch('30-attractions',attrs,'insert into public.npt_attractions(park_id,source_key,attraction_type,'+','.join(cols)+') select p.id,\'nps\',\'activity_or_attraction\','+','.join('x.'+c for c in cols)+' from jsonb_to_recordset(__DATA__) x('+fields+") join public.npt_parks p on p.source_key='nps' and p.source_record_id=x.park on conflict(source_key,source_record_id,park_id) do nothing;",150)
 for kind,table,fk in [('park','npt_parks','park_id'),('campground','npt_campgrounds','campground_id'),('attraction','npt_attractions','attraction_id')]:
