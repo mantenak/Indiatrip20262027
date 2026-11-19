@@ -16,7 +16,7 @@ npt_parks, npt_campgrounds, npt_attractions, npt_catalog_photos, npt_campsites, 
 
 Parks connect to campgrounds and attractions by foreign keys. Photo rows belong to exactly one park, campground, or attraction. Every imported record has a source key and stable source record ID. Imported timestamps distinguish retrieval from independent source verification.
 
-The catalog preserves available fees, hours and date exceptions, booking URLs and notes, campsite counts, public operator contact information, amenities, accessibility, RV/trailer limits, seasons and activity durations. A zero source length is treated as unknown, not a zero-foot limit. Drinking water and dump stations never imply water/sewer hookups. Unknown fit is excluded when a length is requested unless include_unknown_fit=true.
+The catalog preserves available campground-level price ranges or typical nightly averages, hours and date exceptions, booking URLs and notes, campsite counts, public operator contact information, amenities, accessibility, RV/trailer limits, seasons and activity durations. Individual-site records focus on RV fit and hookups; per-lot prices are not required. A zero source length is treated as unknown, not a zero-foot limit. Drinking water and dump stations never imply water/sewer hookups. Unknown fit is excluded when a length is requested unless include_unknown_fit=true.
 
 ## Nearby search
 Use RPC npt_nearby_campgrounds with center_lat, center_lon, radius_miles (default 30; max 250), required_rv_length_ft, require_full_hookups, include_unknown_fit and result_limit (default 50; max 200).
