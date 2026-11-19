@@ -6,6 +6,7 @@
 .npt-planner{z-index:2000;isolation:isolate}.npt-walk-map{isolation:isolate}
 
 .np-status:not(:empty){padding:12px 16px;background:#fff0cf;border:1px solid #dcc38c;border-radius:8px;font-weight:600;color:#573f18}
+.np-limit-details>summary{cursor:pointer;font-weight:800;list-style-position:inside}.np-limit-list{max-height:280px;overflow:auto;margin-top:8px;padding-right:4px}.np-limit-item{padding:8px 0;border-top:1px solid #dfb8a9;display:grid;gap:3px}.np-limit-item>strong{font-size:13px}.np-limit-item>span,.np-limit-item>p{font-size:12px;margin:0}.np-limit-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}.np-limit-actions .btn{padding:5px 8px;font-size:12px}.np-radius-help{display:block;max-width:760px;margin:0 0 8px;line-height:1.4}.np-add-control[hidden]{display:none!important}
 
 
 /* One baseline and a consistent height for preview actions. */
