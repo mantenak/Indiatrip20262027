@@ -41,6 +41,13 @@ Source pages:
 - [St. Andrews](https://www.floridastateparks.org/parks-and-trails/st-andrews-state-park/experiences-amenities-0)
 - [Florida State Parks reservations](https://reserve.floridastateparks.org/Web/Activities/PlanYourVisit.aspx)
 
+## Catalog Manager
+Signed-in site administrators see **Catalog Manager** in the main navigation. It has separate editable lists for national parks, state parks, other park units, campgrounds, individual campsites, attractions, and source directories. Administrators can search, add, edit, or delete records. Campground fees are captured as a campground-level range or average; individual campsite editing focuses on fit and hookups.
+
+Writes are protected by the `npt_catalog_admins` allowlist and `npt_is_catalog_admin()` row-level-security policies. The current site owner is seeded as an administrator. The browser uses only the public Supabase key; no service-role key is shipped to the site.
+
+The Catalog Manager currently provides record management. On-demand source refresh adapters are a separate next step; registering an operator directory does not yet crawl or import its locations.
+
 ## Private campground discovery sources
 The following official operator directories are registered in `npt_catalog_sources` and `sources.sql` as starting points for an on-demand catalog refresh:
 
