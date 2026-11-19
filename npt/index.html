@@ -44,10 +44,11 @@
 </style>
 <link rel="stylesheet" href="./trip-views.css?v=trip-address-3">
 <link rel="stylesheet" href="./planner.css?v=trip-address-3">
+<link rel="stylesheet" href="./catalog-admin.css?v=catalog-manager-1">
 </head>
 <body>
 <div class="app">
-<header class="top"><div class="topin"><button class="npt-brand" type="button" onclick="showHome()"><img class="logo npt-logo" src="./npt-logo.webp" width="72" height="72" alt="National Park Trip logo"><span>National Park Trip</span></button><nav class="topactions" aria-label="Main navigation"><button class="topbtn" id="nptMyTrips">My Trips</button><button class="topbtn primary" id="nptNewTrip">+ New Trip</button></nav></div></header>
+<header class="top"><div class="topin"><button class="npt-brand" type="button" onclick="showHome()"><img class="logo npt-logo" src="./npt-logo.webp" width="72" height="72" alt="National Park Trip logo"><span>National Park Trip</span></button><nav class="topactions" aria-label="Main navigation"><button class="topbtn" id="nptMyTrips">My Trips</button><button class="topbtn primary" id="nptNewTrip">+ New Trip</button><button class="topbtn" id="nptCatalogButton" hidden>Catalog Manager</button></nav></div></header>
 <div class="wrap">
 <section id="home">
 <div class="section" id="myTrips">
@@ -337,7 +338,8 @@ if (!isAuthCallback && !checkShared() && !location.hash.startsWith("#public=") &
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.76.1" defer></script>
 <script src="./trip-views.js?v=trip-address-3" defer></script>
-<script src="./cloud.js?v=trip-address-3" defer></script>
+<script src="./cloud.js?v=catalog-manager-1" defer></script>
+<script src="./catalog-admin.js?v=catalog-manager-1" defer></script>
 <script src="./planner-core.js?v=trip-address-3" defer></script>
 <script src="./planner.js?v=trip-address-3" defer></script>
 </body>
