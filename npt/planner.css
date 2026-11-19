@@ -16,3 +16,5 @@
 @media(max-width:1100px){.np-compact-plan{grid-template-columns:1fr}.np-compact-plan .np-map-column{position:static;grid-row:1}.np-compact-plan .np-map{height:280px;min-height:240px}.np-list-heading{position:static}}
 
 .np-compact-plan *{box-sizing:border-box}.np-compact-plan .np-map .leaflet-tooltip{width:max-content;min-width:120px;max-width:210px}.np-compact-plan .np-list-grid input{width:58px}
+
+.np-draft-stop{border:2px dashed #739580;background:#f0f5ed}.np-draft-stop .np-stop-detail{border-top:1px dashed #739580}.np-drag-handle{cursor:grab;touch-action:none;border:0;background:transparent;color:#315e42;font-size:24px;padding:2px 6px}.np-drag-handle:active{cursor:grabbing}.np-dragging{cursor:grabbing;opacity:.65}.np-drop-before{box-shadow:0 -4px #cb893f}.np-drop-after{box-shadow:0 4px #cb893f}.np-order{flex-wrap:wrap}.np-gap-results .np-result{margin-top:12px}.np-draft-stop .np-stop-toggle{font-weight:700}
