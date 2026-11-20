@@ -72,7 +72,7 @@ function inputHTML(f,v){
  if(type==="json")value=JSON.stringify(value===""?(extra||{}):value,null,2);
  if(type==="array_text"||type==="array_number")value=Array.isArray(value)?value.join(", "):value;
  const tag=type==="textarea"||type==="json"?"textarea":"input",kind=type==="number"?"number":type==="url"?"url":"text";
- return '<label class="npt-cat-field"><span>'+esc(label)+'</span>'+(tag==="textarea"?'<textarea id="catf-'+key+'" '+(required?'required':'')+'>'+esc(value)+'</textarea>':'<input id="catf-'+key+'" type="'+kind+'" value="'+esc(value)+'" '+(required?'required':'')+' '+(type==="number"?'step="any"':'')+'></label>';
+ return '<label class="npt-cat-field"><span>'+esc(label)+'</span>'+(tag==="textarea"?'<textarea id="catf-'+key+'" '+(required?'required':'')+'>'+esc(value)+'</textarea>':'<input id="catf-'+key+'" type="'+kind+'" value="'+esc(value)+'" '+(required?'required':'')+' '+(type==="number"?'step="any"':'')+'>')+'</label>';
 }
 async function edit(row){
  const cfg=defs[active];$("#nptCatFormTitle").textContent=(row?"Edit ":"Add ")+cfg.title.replace(/s$/,"");
