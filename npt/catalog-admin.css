@@ -47,3 +47,10 @@ body.npt-cat-open{overflow:hidden}
 .npt-cat-compact ul{margin:6px 0 0;padding-left:17px}
 .npt-cat-compact li+li{margin-top:4px}
 .npt-cat-compact td:last-child .btn{padding:4px 9px}
+
+.npt-cat-table th:last-child,.npt-cat-table td:last-child{
+ width:5rem;min-width:5rem;white-space:nowrap;overflow-wrap:normal;word-break:normal;
+}
+.npt-cat-table td:last-child button[data-edit]{
+ display:inline-block;width:auto;min-width:max-content;white-space:nowrap;overflow-wrap:normal;word-break:normal;
+}
