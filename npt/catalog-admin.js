@@ -43,8 +43,8 @@ function amps(r,tab=active){return tab==="campsites"?r.electric_amps:(r.metadata
 function setting(r){return r.metadata?.park_context||({inside:"Inside",outside:"Outside",nearby:"Nearby"}[r.metadata?.park_relationship])}
 function electric(r,tab=active){if(tab!=="campsites")return r.electric_hookups;return Array.isArray(amps(r,tab))&&amps(r,tab).some(n=>Number(n)>0)||/ ELECTRIC$/i.test(r.site_type||"")?true:/ NONELECTRIC$/i.test(r.site_type||"")?false:null}
 function ratePresent(r){return [r.metadata?.nightly_rate_usd,r.fees,r.metadata?.rate_notes,r.metadata?.published_nightly_rate_observation,r.metadata?.published_rate_observation,r.metadata?.campground_price_range,r.metadata?.campground_price_summary].some(present)}
-function missing(r,tab=active){
- const gaps=[];const need=(k,label,ok=present(get(r,k)))=>{if(!ok)gaps.push([k,label])};
+function missing(r,tab=active,all=false){
+ const gaps=[];const need=(k,label,ok=present(get(r,k)))=>{if(all||!ok)gaps.push([k,label])};
  if(["national","state","units"].includes(tab)){need("description","Summary");need("official_url","Official link");need("region","State / region");}
  else if(["campgrounds","campsites"].includes(tab)){
   const site=tab==="campsites";
@@ -53,8 +53,8 @@ function missing(r,tab=active){
   if(!site)need("electric_hookups","Electric",typeof electric(r,tab)==="boolean");
   if(!site){
    const context=setting(r);
-   if(!present(r.park_id)&&!(["Transit","Not applicable"].includes(context)))need("park_id","Park association");
-   if(present(r.park_id)&&!present(context))need("metadata.park_context","Park setting");
+   if(!(["Transit","Not applicable"].includes(context)))need("park_id","Park association");
+   if(present(r.park_id))need("metadata.park_context","Park setting",present(context));
   }
   need(site?"water_hookup":"water_hookups","Water hookup",typeof get(r,site?"water_hookup":"water_hookups")==="boolean");
   need(site?"sewer_hookup":"sewer_hookups","Sewer hookup",typeof get(r,site?"sewer_hookup":"sewer_hookups")==="boolean");
@@ -112,7 +112,53 @@ function gapHTML(r,i){
  }).join("");
  return own+'<details class="npt-cat-park-details"><summary>Campgrounds: '+linked.length+' · '+incomplete+' with missing fields</summary><div class="npt-cat-park-camps">'+camps+'</div></details>';
 }
+const compactPark=()=>active==="national"||active==="state";
+let attractionsByPark={},attractionError="";
+function linkedName(row,region){
+ const label=esc((row.name||"Unnamed")+(region?" ("+region+")":""));
+ return /^https?:\/\//i.test(row.official_url||"")?'<a href="'+esc(row.official_url)+'" target="_blank" rel="noopener noreferrer">'+label+'</a>':label;
+}
+function disclosure(label,items){
+ if(!items.length)return esc(label);
+ return '<details><summary>'+esc(label)+'</summary><ul>'+items.map(item=>'<li>'+item+'</li>').join("")+'</ul></details>';
+}
+function campLocation(c){
+ const context=String(setting(c)||"").toLowerCase();
+ if(["inside","inside park"].includes(context))return "inside";
+ if(["outside","outside park","nearby"].includes(context)){
+  const miles=c.metadata?.entrance_road_miles;
+  if(miles!=null&&String(miles).trim()!==""&&Number.isFinite(Number(miles))&&Number(miles)>=0)return Number(miles)<=30?"outside":"far";
+ }
+ return ["transit","not applicable"].includes(context)?"other":"unknown";
+}
+function compactGaps(r,i){
+ const items=missing(r).map(([key,label])=>'<button class="npt-cat-gap" data-edit="'+i+'" data-focus="'+esc(key)+'">'+esc(label)+'</button>');
+ let total=missing(r,active,true).length;
+ if(compactPark()){
+  const camps=campgroundsByPark[r.id]||[];
+  if(campgroundsLoadError||attractionError)return "Lookup unavailable";
+  total+=2+camps.length;
+  if(!(attractionsByPark[r.id]||[]).length)items.push("Attraction inventory unverified");
+  if(!camps.length)items.push("Campground inventory unverified");
+  camps.filter(c=>campLocation(c)==="unknown").forEach(c=>items.push(linkedName(c)+" · setting or road distance"));
+ }
+ return disclosure(items.length+"/"+total,items);
+}
 function summaryCell(r,k,i){
+ if(k==="linked_name")return linkedName(r,r.region||(active==="attractions"?parksById[r.park_id]?.region:""));
+ if(k==="compact_gaps")return compactGaps(r,i);
+ if(k==="park_attractions"||k==="inside"||k==="outside"){
+  const attractions=k==="park_attractions";
+  if(attractions?attractionError:campgroundsLoadError)return "Lookup unavailable";
+  const records=attractions?(attractionsByPark[r.id]||[]):(campgroundsByPark[r.id]||[]).filter(c=>campLocation(c)===k);
+  return disclosure(records.length?String(records.length):"None recorded",records.map(c=>linkedName(c)+(k==="outside"?" · "+esc(c.metadata.entrance_road_miles)+" mi":"")));
+ }
+ if(k==="visit_details"){
+  const items=[r.attraction_type,r.difficulty,r.duration_minutes!=null?r.duration_minutes+" min":null].filter(Boolean);
+  return disclosure(items.length?"Details":"Unknown",items.map(esc));
+ }
+ if(k==="rv_details")return disclosure("RV details",[esc(hookups(r)),esc("Max trailer: "+trailer(r))]);
+ 
  if(k==="inventory_counts"){
   const m=r.metadata||{}, inventory=m.campsites||{}, imported=m.imported_site_counts||{};
   const labels={totalSites:"Total",tentOnly:"Tent only",rvOnly:"RV only",group:"Group",horse:"Horse",walkBoatTo:"Walk/boat",other:"Other"};
@@ -158,11 +204,14 @@ defs.campgrounds.cols.splice(2,0,["inventory_counts","Site counts"]);
 defs.campsites.cols.splice(-1,0,["fifth_wheel","Max fifth-wheel"],["site_rate","Nightly rate"]);
 defs.attractions.cols.push(["summary_park","Park"]);
 for(const k of ["attractions","sources"])defs[k].cols.push(["missing","Missing info"]);
+for(const key of ["national","state"])defs[key].cols=[["linked_name","Park name (state)"],["park_attractions","Attractions / must-see sites"],["inside","Campgrounds inside park"],["outside","Outside park · ≤30 road mi"],["compact_gaps","Missing info"]];
+defs.campgrounds.cols=[["linked_name","Campground (state)"],["summary_park","Park / setting"],["inventory_counts","Site counts"],["rv_details","RV details"],["compact_gaps","Missing info"]];
+defs.attractions.cols=[["linked_name","Attraction (state)"],["summary_park","Park"],["visit_details","Visit details"],["compact_gaps","Missing info"]];
 let editFields=[],editRow=null,quickEdit=false,loadId=0;
 let active="national",page=0,search="",rows=[],count=0,cache={},overlay,formOverlay,campgroundsByPark={},campgroundRows=[],campgroundRowIndex={},campgroundsLoadError="",parksById={},parkLookupError="",campgroundsById={},campgroundLookupError="";
 function db(){return window.nptCloud&&window.nptCloud.db}
 function el(){if($("#nptCatalogManager"))return;document.body.insertAdjacentHTML("beforeend",
- '<div class="npt-cat-backdrop" id="nptCatalogManager" hidden><section class="npt-cat-panel" role="dialog" aria-modal="true" aria-label="Catalog Manager"><header class="npt-cat-head"><div><small>ADMIN</small><h2>Catalog Manager</h2><p>Manage source-backed parks, campgrounds, campsites, and attractions.</p></div><button class="npt-cat-close" id="nptCatClose">Close</button></header><div class="npt-cat-toolbar"><input id="nptCatSearch" type="search" placeholder="Search this list"><button class="btn" id="nptCatSearchBtn">Search</button><button class="btn primary" id="nptCatAdd">+ Add record</button></div><nav class="npt-cat-tabs" id="nptCatTabs"></nav><div id="nptCatStatus" class="npt-cat-status" aria-live="polite"></div><div id="nptCatList"></div><footer class="npt-cat-paging"><button class="btn" id="nptCatPrev">← Previous</button><span id="nptCatPage"></span><button class="btn" id="nptCatNext">Next →</button></footer></section></div><div class="npt-cat-form-backdrop" id="nptCatFormBackdrop" hidden><section class="npt-cat-form" role="dialog" aria-modal="true" aria-label="Edit catalog record"><header><h3 id="nptCatFormTitle">Catalog record</h3><button class="npt-cat-close" id="nptCatFormClose">Close</button></header><form id="nptCatForm"><div id="nptCatFields" class="npt-cat-fields"></div><p class="npt-cat-status" id="nptCatFormStatus"></p><div class="npt-cat-form-actions"><button type="button" class="btn danger" id="nptCatDelete" hidden>Delete</button><button type="button" class="btn" id="nptCatCancel">Cancel</button><button type="submit" class="btn primary" id="nptCatSave">Save record</button></div></form></section></div>');
+ '<div class="npt-cat-backdrop" id="nptCatalogManager" hidden><section class="npt-cat-panel" role="dialog" aria-modal="true" aria-label="Catalog Manager"><header class="npt-cat-head"><div><small>ADMIN</small><h2>Catalog Manager</h2></div><button class="npt-cat-close" id="nptCatClose">Close</button></header><div class="npt-cat-toolbar"><input id="nptCatSearch" type="search" placeholder="Search this list"><button class="btn" id="nptCatSearchBtn">Search</button><button class="btn primary" id="nptCatAdd">+ Add record</button></div><nav class="npt-cat-tabs" id="nptCatTabs"></nav><div id="nptCatStatus" class="npt-cat-status" aria-live="polite"></div><div id="nptCatList"></div><footer class="npt-cat-paging"><button class="btn" id="nptCatPrev">← Previous</button><span id="nptCatPage"></span><button class="btn" id="nptCatNext">Next →</button></footer></section></div><div class="npt-cat-form-backdrop" id="nptCatFormBackdrop" hidden><section class="npt-cat-form" role="dialog" aria-modal="true" aria-label="Edit catalog record"><header><h3 id="nptCatFormTitle">Catalog record</h3><button class="npt-cat-close" id="nptCatFormClose">Close</button></header><form id="nptCatForm"><div id="nptCatFields" class="npt-cat-fields"></div><p class="npt-cat-status" id="nptCatFormStatus"></p><div class="npt-cat-form-actions"><button type="button" class="btn danger" id="nptCatDelete" hidden>Delete</button><button type="button" class="btn" id="nptCatCancel">Cancel</button><button type="submit" class="btn primary" id="nptCatSave">Save record</button></div></form></section></div>');
  overlay=$("#nptCatalogManager");formOverlay=$("#nptCatFormBackdrop");
  $("#nptCatClose").onclick=close;$("#nptCatFormClose").onclick=closeForm;$("#nptCatCancel").onclick=closeForm;
  overlay.addEventListener("click",e=>{if(e.target===overlay)close()});
@@ -190,10 +239,22 @@ async function load(){
  const pageIds=rows.map(x=>x[cfg.pk]).filter(Boolean);
  campgroundsByPark={};campgroundRows=[];campgroundRowIndex={};campgroundsLoadError="";parksById={};parkLookupError="";campgroundsById={};campgroundLookupError="";
  if(parkTab()&&pageIds.length){
-  const linked=await d.from("npt_campgrounds").select("*").in("park_id",pageIds);
+  const readLinked=async(table,fields)=>{
+   const data=[];
+   for(let offset=0;request===loadId;offset+=500){
+    const result=await d.from(table).select(fields).in("park_id",pageIds).order("name").order("id").range(offset,offset+499);
+    if(result.error)return result;
+    data.push(...result.data);
+    if(result.data.length<500)break;
+   }
+   return {data};
+  };
+  const [linked,attractions]=await Promise.all([readLinked("npt_campgrounds","*"),compactPark()?readLinked("npt_attractions","id,park_id,name,official_url"):Promise.resolve({data:[]})]);
   if(request!==loadId)return;
+  attractionsByPark={};attractionError=attractions.error?.message||"";
+  for(const a of attractions.data||[])(attractionsByPark[a.park_id]||=[]).push(a);
   if(linked.error)campgroundsLoadError=linked.error.message;
-  else{campgroundRows=linked.data||[];campgroundRows.forEach((c,i)=>{campgroundRowIndex[String(c.id)]=i;(campgroundsByPark[String(c.park_id)]||(campgroundsByPark[String(c.park_id)]=[])).push(c)})}
+  else{campgroundRows=linked.data.filter(c=>c.name!=="Dump Station");campgroundRows.forEach((c,i)=>{campgroundRowIndex[c.id]=i;(campgroundsByPark[c.park_id]||=[]).push(c)})}
  }
  if(active==="campsites"){
   const campIds=[...new Set(rows.map(x=>x.campground_id).filter(Boolean))];
@@ -204,14 +265,14 @@ async function load(){
   if(parkIds.length){const linkedParks=await d.from("npt_parks").select("id,name,region").in("id",parkIds);if(request!==loadId)return;if(linkedParks.error)parkLookupError=linkedParks.error.message;else(linkedParks.data||[]).forEach(p=>parksById[String(p.id)]=p)}
  }
  Object.values(campgroundsById).forEach(c=>{c.label=[c.name,parksById[String(c.park_id)]?.name].filter(Boolean).join(" · ")||"Unnamed campground"});
- const table='<div class="npt-cat-table-wrap"><table class="npt-cat-table"><thead><tr>'+cfg.cols.map(c=>'<th>'+esc(c[1])+'</th>').join("")+'<th>Actions</th></tr></thead><tbody>'+rows.map((row,i)=>'<tr'+(parkTab()?' class="npt-cat-park-row"':'')+'>'+cfg.cols.map(c=>'<td>'+summaryCell(row,c[0],i)+'</td>').join("")+'<td><button class="btn" data-edit="'+i+'">Edit</button></td></tr>').join("")+'</tbody></table></div>';
+ const table='<div class="npt-cat-table-wrap"><table class="npt-cat-table'+(compactPark()||["campgrounds","attractions"].includes(active)?' npt-cat-compact':'')+'"><thead><tr>'+cfg.cols.map(c=>'<th>'+esc(c[1])+'</th>').join("")+'<th>Edit</th></tr></thead><tbody>'+rows.map((row,i)=>'<tr'+(parkTab()?' class="npt-cat-park-row"':'')+'>'+cfg.cols.map(c=>'<td>'+summaryCell(row,c[0],i)+'</td>').join("")+'<td><button class="btn" data-edit="'+i+'">Edit</button></td></tr>').join("")+'</tbody></table></div>';
  $("#nptCatList").innerHTML=count?table:'<div class="npt-cat-empty">No records found.</div>';
  $("#nptCatList").querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>edit(rows[Number(b.dataset.edit)],b.dataset.focus));
  $("#nptCatList").querySelectorAll("[data-camp-edit]").forEach(b=>{b.onclick=()=>{const record=campgroundRows[Number(b.dataset.campEdit)];if(!record)return;active="campgrounds";renderTabs();edit(record,b.dataset.focus)}});
  $("#nptCatList").querySelectorAll("[data-add-campground]").forEach(b=>{b.onclick=()=>{const park=rows[Number(b.dataset.addCampground)];if(!park)return;active="campgrounds";renderTabs();edit(null,null,{park_id:park.id,country:park.country||"US",region:park.region||""})}});
  $("#nptCatPage").textContent=count?((page*100+1)+"–"+Math.min((page+1)*100,count)+" of "+count):"0 records";
  $("#nptCatPrev").disabled=page===0;$("#nptCatNext").disabled=(page+1)*100>=count;
- status("Showing "+cfg.title.toLowerCase()+". Click a missing field to fill it in. Populated does not mean verified. Park hookup counts summarize stored campground flags, not a completed source review. Open a count for per-campground flags, source notes, and partial site observations. E = electric, W = water, S = sewer, D = shared dump station.");
+ status("");
 }
 function cell(row,key){let v=row[key];if(key==="park_id"||key==="campground_id"){return v?((cache[key]||{})[v]||v):""}if(Array.isArray(v))return v.join(", ");if(v&&typeof v==="object")return JSON.stringify(v);if(typeof v==="boolean")return v?"Yes":"No";return v==null?"":v}
 async function relations(table){if(cache["table:"+table])return cache["table:"+table];let all=[],start=0;while(true){const r=await db().from(table).select(table==="npt_parks"?"id,name,region":"id,name,region").order("name").range(start,start+499);if(r.error)throw r.error;all=all.concat(r.data||[]);if(!r.data||r.data.length<500)break;start+=500}const opts=all.map(x=>({value:x.id,label:[x.name,x.region].filter(Boolean).join(" · ")}));cache["table:"+table]=opts;const map={};opts.forEach(x=>map[x.value]=x.label);const fk=table==="npt_parks"?"park_id":"campground_id";cache[fk]=map;return opts}
