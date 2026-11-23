@@ -34,6 +34,7 @@ const campTab=()=>["campgrounds","campsites"].includes(active);
 const extraFields={
  "metadata.electric_amps":["metadata.electric_amps","Electric amps (comma separated)","array_number"],
  "metadata.dump_station":["metadata.dump_station","Shared dump station available","boolean"],
+ "metadata.park_context":["metadata.park_context","Park setting","select",false,["Inside park","Outside park","Transit","Not applicable"]],
  "metadata.max_trailer_length_ft":["metadata.max_trailer_length_ft","Published maximum trailer length (ft)","number"],
  "metadata.rate_notes":["metadata.rate_notes","Published rate / range (include currency and period)","textarea"],
  "metadata.detail_source_url":["metadata.detail_source_url","Source URL for this edit","url"]
@@ -47,19 +48,26 @@ function missing(r,tab=active){
  else if(["campgrounds","campsites"].includes(tab)){
   const site=tab==="campsites";
   need(site?"site_type":"campground_type","Type");
+  if(site)need("campground_id","Campground association");
   if(!site)need("electric_hookups","Electric",typeof electric(r,tab)==="boolean");
+  if(!site){
+   const context=r.metadata?.park_context;
+   if(!present(r.park_id)&&!(["Transit","Not applicable"].includes(context)))need("park_id","Park association");
+   if(present(r.park_id)&&!present(context))need("metadata.park_context","Park setting");
+  }
   need(site?"water_hookup":"water_hookups","Water hookup",typeof get(r,site?"water_hookup":"water_hookups")==="boolean");
   need(site?"sewer_hookup":"sewer_hookups","Sewer hookup",typeof get(r,site?"sewer_hookup":"sewer_hookups")==="boolean");
   if(!site)need("metadata.dump_station","Dump station",typeof r.metadata?.dump_station==="boolean");
   if(electric(r,tab)!==false)need(site?"electric_amps":"metadata.electric_amps","Amps",present(amps(r,tab)));
   if(r.trailer_allowed!==false)need(site?"metadata.max_trailer_length_ft":"max_trailer_length_ft","Max trailer",Number(get(r,site?"metadata.max_trailer_length_ft":"max_trailer_length_ft"))>0);
   need("metadata.rate_notes","Rate",ratePresent(r));need("reservation_url","Booking link");
- }else if(tab==="attractions"){need("description","Summary");need("official_url","Official link");need("duration_minutes","Duration");}
+ }else if(tab==="attractions"){need("park_id","Park association");need("description","Summary");need("official_url","Official link");need("duration_minutes","Duration");}
  else {need("url","Source link");need("coverage_notes","Coverage notes");}
  return gaps;
 }
 function hookups(r){
  if(parkTab()){
+  if(campgroundsLoadError)return "Campground details failed to load";
   const linked=campgroundsByPark[String(r.id)]||[];
   if(!linked.length)return "No linked campground records";
   const full=linked.filter(c=>c.electric_hookups===true&&c.water_hookups===true&&c.sewer_hookups===true).length;
@@ -74,6 +82,7 @@ function hookups(r){
 }
 function trailer(r){
  if(parkTab()){
+  if(campgroundsLoadError)return "Campground details failed to load";
   const linked=campgroundsByPark[String(r.id)]||[];
   if(!linked.length)return "No linked campground records";
   const lengths=[...new Set(linked.map(c=>Number(c.max_trailer_length_ft)).filter(n=>n>0))].sort((a,b)=>a-b);
@@ -101,15 +110,24 @@ function gapHTML(r,i){
 }
 function summaryCell(r,k,i){
  if(k==="summary_name")return '<button class="npt-cat-name" data-edit="'+i+'">'+esc(r.name||r.site_number||"Unnamed")+'</button><small class="npt-cat-sub">'+esc([r.region,active==="campgrounds"?(r.campground_type||"Type unknown").replace(/_/g," "):active==="campsites"?r.site_type:null].filter(Boolean).join(" · "))+'</small>';
+ if(k==="summary_park"){
+  if(active==="attractions")return esc(parkLookupError?"Park lookup failed":(parksById[String(r.park_id)]?.name||"Park not linked"));
+  if(active==="campsites")return esc(campgroundLookupError?"Campground lookup failed":(campgroundsById[String(r.campground_id)]?.label||"Campground not linked"));
+  const park=parksById[String(r.park_id)],context=r.metadata?.park_context;
+  const value=park?[park.name,context||"Setting unknown"].join(" · "):context||"Park / setting unknown";
+  return '<button class="npt-cat-cell-edit" data-edit="'+i+'" data-focus="'+(context||park?"metadata.park_context":"park_id")+'">'+esc(value)+'</button>';
+ }
  if(k==="summary_hookups")return parkTab()?esc(hookups(r)):'<button class="npt-cat-cell-edit" data-edit="'+i+'" data-focus="hookups">'+esc(hookups(r))+'</button>';
  if(k==="summary_trailer")return parkTab()?esc(trailer(r)):'<button class="npt-cat-cell-edit" data-edit="'+i+'" data-focus="'+(active==="campsites"?'metadata.max_trailer_length_ft':'max_trailer_length_ft')+'">'+esc(trailer(r))+'</button>';
  if(k==="missing")return gapHTML(r,i);
  return esc(cell(r,k));
 }
-for(const k of ["national","state","units","campgrounds","campsites"])defs[k].cols=[["summary_name",k==="campsites"?"Site / Type":"Name / Type"],["summary_hookups","Hookups"],["summary_trailer","Max trailer"],["missing","Missing info"]];
+for(const k of ["national","state","units","campsites"])defs[k].cols=[["summary_name",k==="campsites"?"Site / Type":"Name / Type"],["summary_hookups","Hookups"],["summary_trailer","Max trailer"],["missing","Missing info"]];
+defs.campgrounds.cols=[["summary_name","Campground / type"],["summary_park","Park / setting"],["summary_hookups","Hookups"],["summary_trailer","Max trailer"],["missing","Missing info"]];
+defs.attractions.cols.push(["summary_park","Park"]);
 for(const k of ["attractions","sources"])defs[k].cols.push(["missing","Missing info"]);
 let editFields=[],editRow=null,quickEdit=false,loadId=0;
-let active="national",page=0,search="",rows=[],count=0,cache={},overlay,formOverlay,campgroundsByPark={},campgroundRows=[],campgroundRowIndex={},campgroundsLoadError="";
+let active="national",page=0,search="",rows=[],count=0,cache={},overlay,formOverlay,campgroundsByPark={},campgroundRows=[],campgroundRowIndex={},campgroundsLoadError="",parksById={},parkLookupError="",campgroundsById={},campgroundLookupError="";
 function db(){return window.nptCloud&&window.nptCloud.db}
 function el(){if($("#nptCatalogManager"))return;document.body.insertAdjacentHTML("beforeend",
  '<div class="npt-cat-backdrop" id="nptCatalogManager" hidden><section class="npt-cat-panel" role="dialog" aria-modal="true" aria-label="Catalog Manager"><header class="npt-cat-head"><div><small>ADMIN</small><h2>Catalog Manager</h2><p>Manage source-backed parks, campgrounds, campsites, and attractions.</p></div><button class="npt-cat-close" id="nptCatClose">Close</button></header><div class="npt-cat-toolbar"><input id="nptCatSearch" type="search" placeholder="Search this list"><button class="btn" id="nptCatSearchBtn">Search</button><button class="btn primary" id="nptCatAdd">+ Add record</button></div><nav class="npt-cat-tabs" id="nptCatTabs"></nav><div id="nptCatStatus" class="npt-cat-status" aria-live="polite"></div><div id="nptCatList"></div><footer class="npt-cat-paging"><button class="btn" id="nptCatPrev">← Previous</button><span id="nptCatPage"></span><button class="btn" id="nptCatNext">Next →</button></footer></section></div><div class="npt-cat-form-backdrop" id="nptCatFormBackdrop" hidden><section class="npt-cat-form" role="dialog" aria-modal="true" aria-label="Edit catalog record"><header><h3 id="nptCatFormTitle">Catalog record</h3><button class="npt-cat-close" id="nptCatFormClose">Close</button></header><form id="nptCatForm"><div id="nptCatFields" class="npt-cat-fields"></div><p class="npt-cat-status" id="nptCatFormStatus"></p><div class="npt-cat-form-actions"><button type="button" class="btn danger" id="nptCatDelete" hidden>Delete</button><button type="button" class="btn" id="nptCatCancel">Cancel</button><button type="submit" class="btn primary" id="nptCatSave">Save record</button></div></form></section></div>');
@@ -138,14 +156,23 @@ async function load(){
  if(r.error){status(r.error.message);$("#nptCatList").innerHTML="";return}
  rows=r.data||[];count=r.count||0;
  const pageIds=rows.map(x=>x[cfg.pk]).filter(Boolean);
- campgroundsByPark={};campgroundRows=[];campgroundRowIndex={};campgroundsLoadError="";
+ campgroundsByPark={};campgroundRows=[];campgroundRowIndex={};campgroundsLoadError="";parksById={};parkLookupError="";campgroundsById={};campgroundLookupError="";
  if(parkTab()&&pageIds.length){
   const linked=await d.from("npt_campgrounds").select("*").in("park_id",pageIds);
   if(request!==loadId)return;
   if(linked.error)campgroundsLoadError=linked.error.message;
   else{campgroundRows=linked.data||[];campgroundRows.forEach((c,i)=>{campgroundRowIndex[String(c.id)]=i;(campgroundsByPark[String(c.park_id)]||(campgroundsByPark[String(c.park_id)]=[])).push(c)})}
  }
- const table='<div class="npt-cat-table-wrap"><table class="npt-cat-table"><thead><tr>'+cfg.cols.map(c=>'<th>'+esc(c[1])+'</th>').join("")+'<th>Actions</th></tr></thead><tbody>'+rows.map((row,i)=>'<tr>'+cfg.cols.map(c=>'<td>'+summaryCell(row,c[0],i)+'</td>').join("")+'<td><button class="btn" data-edit="'+i+'">Edit</button></td></tr>').join("")+'</tbody></table></div>';
+ if(active==="campsites"){
+  const campIds=[...new Set(rows.map(x=>x.campground_id).filter(Boolean))];
+  if(campIds.length){const linkedCamps=await d.from("npt_campgrounds").select("id,name,park_id,region,campground_type").in("id",campIds);if(request!==loadId)return;if(linkedCamps.error)campgroundLookupError=linkedCamps.error.message;else(linkedCamps.data||[]).forEach(c=>campgroundsById[String(c.id)]={...c,label:c.name||"Unnamed campground"})}
+ }
+ if(["campgrounds","attractions","campsites"].includes(active)){
+  const parkIds=[...new Set((active==="campsites"?Object.values(campgroundsById).map(c=>c.park_id):rows.map(x=>x.park_id)).filter(Boolean))];
+  if(parkIds.length){const linkedParks=await d.from("npt_parks").select("id,name,region").in("id",parkIds);if(request!==loadId)return;if(linkedParks.error)parkLookupError=linkedParks.error.message;else(linkedParks.data||[]).forEach(p=>parksById[String(p.id)]=p)}
+ }
+ Object.values(campgroundsById).forEach(c=>{c.label=[c.name,parksById[String(c.park_id)]?.name].filter(Boolean).join(" · ")||"Unnamed campground"});
+ const table='<div class="npt-cat-table-wrap"><table class="npt-cat-table"><thead><tr>'+cfg.cols.map(c=>'<th>'+esc(c[1])+'</th>').join("")+'<th>Actions</th></tr></thead><tbody>'+rows.map((row,i)=>'<tr'+(parkTab()?' class="npt-cat-park-row"':'')+'>'+cfg.cols.map(c=>'<td>'+summaryCell(row,c[0],i)+'</td>').join("")+'<td><button class="btn" data-edit="'+i+'">Edit</button></td></tr>').join("")+'</tbody></table></div>';
  $("#nptCatList").innerHTML=count?table:'<div class="npt-cat-empty">No records found.</div>';
  $("#nptCatList").querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>edit(rows[Number(b.dataset.edit)],b.dataset.focus));
  $("#nptCatList").querySelectorAll("[data-camp-edit]").forEach(b=>{b.onclick=()=>{const record=campgroundRows[Number(b.dataset.campEdit)];if(!record)return;active="campgrounds";renderTabs();edit(record,b.dataset.focus)}});
@@ -160,7 +187,7 @@ function inputHTML(f,v){
  const key=f[0],label=f[1],type=f[2],required=f[3],extra=f[4];let value=v;
  if(value==null)value="";
  if(type==="boolean")return '<label class="npt-cat-field"><span>'+esc(label)+'</span><select id="catf-'+key+'"><option value="">Unknown</option><option value="true" '+(value===true?'selected':'')+'>Yes</option><option value="false" '+(value===false?'selected':'')+'>No</option></select></label>';
- if(type==="select")return '<label class="npt-cat-field"><span>'+esc(label)+'</span><select id="catf-'+key+'" '+(required?'required':'')+'>'+extra.map(o=>'<option value="'+esc(o)+'" '+(value===o?'selected':'')+'>'+esc(o.replace(/_/g," "))+'</option>').join("")+'</select></label>';
+ if(type==="select")return '<label class="npt-cat-field"><span>'+esc(label)+'</span><select id="catf-'+key+'" '+(required?'required':'')+'>'+(!required?'<option value="" '+(!value?'selected':'')+'>Unknown / choose…</option>':'')+extra.map(o=>'<option value="'+esc(o)+'" '+(value===o?'selected':'')+'>'+esc(o.replace(/_/g," "))+'</option>').join("")+'</select></label>';
  if(type==="relation")return '<label class="npt-cat-field"><span>'+esc(label)+'</span><select id="catf-'+key+'" '+(required?'required':'')+'><option value="">Select…</option></select><small>Type to filter by name if the list is long.</small></label>';
  if(type==="json")value=JSON.stringify(value===""?(extra||{}):value,null,2);
  if(type==="array_text"||type==="array_number")value=Array.isArray(value)?value.join(", "):value;
