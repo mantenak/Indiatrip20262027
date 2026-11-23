@@ -75,7 +75,7 @@ function hookups(r){
    [c.electric_hookups,c.water_hookups,c.sewer_hookups].some(v=>v===true)?"some":
    [c.electric_hookups,c.water_hookups,c.sewer_hookups].some(v=>v===false)?"incomplete":"unverified";
   const counts={full:0,some:0,none:0,incomplete:0,unverified:0};linked.forEach(c=>counts[status(c)]++);
-  return "Full "+counts.full+" · Some "+counts.some+" · None "+counts.none+" · Incomplete "+(counts.incomplete+counts.unverified)+" ("+linked.length+")";
+  return "Full E/W/S "+counts.full+" · Some Yes "+counts.some+" · All No "+counts.none+" · Unknown "+(counts.incomplete+counts.unverified)+" ("+linked.length+")";
  }
  const site=active==="campsites",e=electric(r),w=r[site?"water_hookup":"water_hookups"],s=r[site?"sewer_hookup":"sewer_hookups"],d=r.metadata?.dump_station;
  const flag=(v,k)=>k+": "+(v===true?"Yes":v===false?"No":"Unknown");
@@ -192,7 +192,7 @@ async function load(){
  $("#nptCatList").querySelectorAll("[data-add-campground]").forEach(b=>{b.onclick=()=>{const park=rows[Number(b.dataset.addCampground)];if(!park)return;active="campgrounds";renderTabs();edit(null,null,{park_id:park.id,country:park.country||"US",region:park.region||""})}});
  $("#nptCatPage").textContent=count?((page*100+1)+"–"+Math.min((page+1)*100,count)+" of "+count):"0 records";
  $("#nptCatPrev").disabled=page===0;$("#nptCatNext").disabled=(page+1)*100>=count;
- status("Showing "+cfg.title.toLowerCase()+". Click a missing field to fill it in. Populated does not mean verified. Park hookup totals summarize linked campgrounds: Full = E+W+S; Some = at least one confirmed hookup; None = all three confirmed absent; Incomplete includes unknown fields. Open a total for per-campground details. E = electric, W = water, S = sewer, D = shared dump station.");
+ status("Showing "+cfg.title.toLowerCase()+". Click a missing field to fill it in. Populated does not mean verified. Park hookup counts summarize stored campground flags, not a completed source review. Open a count for per-campground flags, source notes, and partial site observations. E = electric, W = water, S = sewer, D = shared dump station.");
 }
 function cell(row,key){let v=row[key];if(key==="park_id"||key==="campground_id"){return v?((cache[key]||{})[v]||v):""}if(Array.isArray(v))return v.join(", ");if(v&&typeof v==="object")return JSON.stringify(v);if(typeof v==="boolean")return v?"Yes":"No";return v==null?"":v}
 async function relations(table){if(cache["table:"+table])return cache["table:"+table];let all=[],start=0;while(true){const r=await db().from(table).select(table==="npt_parks"?"id,name,region":"id,name,region").order("name").range(start,start+499);if(r.error)throw r.error;all=all.concat(r.data||[]);if(!r.data||r.data.length<500)break;start+=500}const opts=all.map(x=>({value:x.id,label:[x.name,x.region].filter(Boolean).join(" · ")}));cache["table:"+table]=opts;const map={};opts.forEach(x=>map[x.value]=x.label);const fk=table==="npt_parks"?"park_id":"campground_id";cache[fk]=map;return opts}
