@@ -70,10 +70,12 @@ function hookups(r){
   if(campgroundsLoadError)return "Campground details failed to load";
   const linked=campgroundsByPark[String(r.id)]||[];
   if(!linked.length)return "No linked campground records";
-  const full=linked.filter(c=>c.electric_hookups===true&&c.water_hookups===true&&c.sewer_hookups===true).length;
-  const knownNotFull=linked.filter(c=>c.electric_hookups===false||c.water_hookups===false||c.sewer_hookups===false).length;
-  const unknown=linked.length-full-knownNotFull,dump=linked.filter(c=>c.metadata?.dump_station===true).length;
-  return linked.length+" campground(s) · Full E/W/S: "+full+" · Known not full: "+knownNotFull+" · Hookup unknown: "+unknown+" · D: "+dump;
+  const status=c=>c.electric_hookups===true&&c.water_hookups===true&&c.sewer_hookups===true?"full":
+   c.electric_hookups===false&&c.water_hookups===false&&c.sewer_hookups===false?"none":
+   [c.electric_hookups,c.water_hookups,c.sewer_hookups].some(v=>v===true)?"some":
+   [c.electric_hookups,c.water_hookups,c.sewer_hookups].some(v=>v===false)?"incomplete":"unverified";
+  const counts={full:0,some:0,none:0,incomplete:0,unverified:0};linked.forEach(c=>counts[status(c)]++);
+  return "Full "+counts.full+" · Some "+counts.some+" · None "+counts.none+" · Incomplete "+(counts.incomplete+counts.unverified)+" ("+linked.length+")";
  }
  const site=active==="campsites",e=electric(r),w=r[site?"water_hookup":"water_hookups"],s=r[site?"sewer_hookup":"sewer_hookups"],d=r.metadata?.dump_station;
  const flag=(v,k)=>k+": "+(v===true?"Yes":v===false?"No":"Unknown");
@@ -103,10 +105,11 @@ function gapHTML(r,i){
  if(campgroundsLoadError)return own+' <span class="npt-cat-gap">Campground details failed to load</span>';
  const linked=campgroundsByPark[String(r.id)]||[];
  if(!linked.length)return own+' <button class="npt-cat-gap" data-add-campground="'+i+'">No linked campground records · Add campground</button>';
+ const incomplete=linked.filter(c=>missing(c,"campgrounds").length).length;
  const camps=linked.map(c=>{const idx=campgroundRowIndex[String(c.id)],missingFields=missing(c,"campgrounds");
   return '<div class="npt-cat-park-camp"><strong>'+esc(c.name||"Unnamed campground")+'</strong><small class="npt-cat-sub">'+esc((c.campground_type||"Type unknown").replace(/_/g," "))+'</small> '+(missingFields.length?missingFields.map(([k,label])=>'<button class="npt-cat-gap" data-camp-edit="'+idx+'" data-focus="'+k+'">'+esc(label)+'</button>').join(" "):'<span class="npt-cat-complete">Displayed fields populated</span>');
  }).join("");
- return own+'<div class="npt-cat-park-camps">'+camps+'</div>';
+ return own+'<details class="npt-cat-park-details"><summary>Campgrounds: '+linked.length+' · '+incomplete+' with missing fields</summary><div class="npt-cat-park-camps">'+camps+'</div></details>';
 }
 function summaryCell(r,k,i){
  if(k==="summary_name")return '<button class="npt-cat-name" data-edit="'+i+'">'+esc(r.name||r.site_number||"Unnamed")+'</button><small class="npt-cat-sub">'+esc([r.region,active==="campgrounds"?(r.campground_type||"Type unknown").replace(/_/g," "):active==="campsites"?r.site_type:null].filter(Boolean).join(" · "))+'</small>';
@@ -117,7 +120,16 @@ function summaryCell(r,k,i){
   const value=park?[park.name,context||"Setting unknown"].join(" · "):context||"Park / setting unknown";
   return '<button class="npt-cat-cell-edit" data-edit="'+i+'" data-focus="'+(context||park?"metadata.park_context":"park_id")+'">'+esc(value)+'</button>';
  }
- if(k==="summary_hookups")return parkTab()?esc(hookups(r)):'<button class="npt-cat-cell-edit" data-edit="'+i+'" data-focus="hookups">'+esc(hookups(r))+'</button>';
+ if(k==="summary_hookups")return parkTab()?'<details class="npt-cat-hookup-details"><summary>'+esc(hookups(r))+'</summary><ul>'+((campgroundsByPark[String(r.id)]||[]).map(c=>{
+  const flag=v=>v===true?"Yes":v===false?"No":"Unknown",meta=c.metadata||{},obs=meta.hookup_site_observations||{};
+  const imported=Number(obs.imported_site_records)>0?' <small>Partial Recreation.gov import: '+esc(obs.imported_site_records)+' records; E '+esc(obs.sites_with_electric_amps??'unknown')+', W '+esc(obs.sites_with_water_hookup??'unknown')+', S '+esc(obs.sites_with_sewer_hookup??'unknown')+'. Not total inventory or live availability.</small>':'';
+  const note=meta.hookup_site_details||meta.hookup_summary?' <small>'+esc(meta.hookup_site_details||meta.hookup_summary)+'</small>':'';
+  const inv=meta.source_published_site_inventory, invCounts=inv?.category_counts;
+  const published=inv?' <small>Published NPS inventory: '+esc(inv.total_sites??'total not stated')+' total sites'+(invCounts?' · '+Object.entries(invCounts).map(([k,v])=>esc(k)+' '+esc(v)).join(', '):'')+'.</small>':'';
+  const urls=meta.hookup_summary_sources||meta.hookup_source_urls||[];
+  const src=(Array.isArray(urls)?urls:[]).map((url,j)=>'<a href="'+esc(url)+'" target="_blank" rel="noopener">Source '+(j+1)+'</a>').join(' ');
+  return '<li><strong>'+esc(c.name||"Unnamed campground")+'</strong>: E '+flag(c.electric_hookups)+', W '+flag(c.water_hookups)+', S '+flag(c.sewer_hookups)+', D '+flag(meta.dump_station)+note+published+imported+(src?' '+src:'')+'</li>';
+ }).join(''))+'</ul></details>':'<button class="npt-cat-cell-edit" data-edit="'+i+'" data-focus="hookups">'+esc(hookups(r))+'</button>';
  if(k==="summary_trailer")return parkTab()?esc(trailer(r)):'<button class="npt-cat-cell-edit" data-edit="'+i+'" data-focus="'+(active==="campsites"?'metadata.max_trailer_length_ft':'max_trailer_length_ft')+'">'+esc(trailer(r))+'</button>';
  if(k==="missing")return gapHTML(r,i);
  return esc(cell(r,k));
@@ -180,7 +192,7 @@ async function load(){
  $("#nptCatList").querySelectorAll("[data-add-campground]").forEach(b=>{b.onclick=()=>{const park=rows[Number(b.dataset.addCampground)];if(!park)return;active="campgrounds";renderTabs();edit(null,null,{park_id:park.id,country:park.country||"US",region:park.region||""})}});
  $("#nptCatPage").textContent=count?((page*100+1)+"–"+Math.min((page+1)*100,count)+" of "+count):"0 records";
  $("#nptCatPrev").disabled=page===0;$("#nptCatNext").disabled=(page+1)*100>=count;
- status("Showing "+cfg.title.toLowerCase()+". Click a missing field to fill it in. Populated does not mean verified. E = electric, W = water, S = sewer at site; D = shared dump station. Full requires E/W/S. Park limits vary by campground.");
+ status("Showing "+cfg.title.toLowerCase()+". Click a missing field to fill it in. Populated does not mean verified. Park hookup totals summarize linked campgrounds: Full = E+W+S; Some = at least one confirmed hookup; None = all three confirmed absent; Incomplete includes unknown fields. Open a total for per-campground details. E = electric, W = water, S = sewer, D = shared dump station.");
 }
 function cell(row,key){let v=row[key];if(key==="park_id"||key==="campground_id"){return v?((cache[key]||{})[v]||v):""}if(Array.isArray(v))return v.join(", ");if(v&&typeof v==="object")return JSON.stringify(v);if(typeof v==="boolean")return v?"Yes":"No";return v==null?"":v}
 async function relations(table){if(cache["table:"+table])return cache["table:"+table];let all=[],start=0;while(true){const r=await db().from(table).select(table==="npt_parks"?"id,name,region":"id,name,region").order("name").range(start,start+499);if(r.error)throw r.error;all=all.concat(r.data||[]);if(!r.data||r.data.length<500)break;start+=500}const opts=all.map(x=>({value:x.id,label:[x.name,x.region].filter(Boolean).join(" · ")}));cache["table:"+table]=opts;const map={};opts.forEach(x=>map[x.value]=x.label);const fk=table==="npt_parks"?"park_id":"campground_id";cache[fk]=map;return opts}
