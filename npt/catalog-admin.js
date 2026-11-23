@@ -124,6 +124,7 @@ function summaryCell(r,k,i){
 }
 for(const k of ["national","state","units","campsites"])defs[k].cols=[["summary_name",k==="campsites"?"Site / Type":"Name / Type"],["summary_hookups","Hookups"],["summary_trailer","Max trailer"],["missing","Missing info"]];
 defs.campgrounds.cols=[["summary_name","Campground / type"],["summary_park","Park / setting"],["summary_hookups","Hookups"],["summary_trailer","Max trailer"],["missing","Missing info"]];
+defs.campsites.cols=[["summary_name","Site / type"],["summary_park","Campground / park"],["summary_hookups","Hookups"],["summary_trailer","Max trailer"],["missing","Missing info"]];
 defs.attractions.cols.push(["summary_park","Park"]);
 for(const k of ["attractions","sources"])defs[k].cols.push(["missing","Missing info"]);
 let editFields=[],editRow=null,quickEdit=false,loadId=0;
