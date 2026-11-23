@@ -40,8 +40,9 @@ const extraFields={
  "metadata.detail_source_url":["metadata.detail_source_url","Source URL for this edit","url"]
 };
 function amps(r,tab=active){return tab==="campsites"?r.electric_amps:(r.metadata?.electric_amps??r.metadata?.electric_amps_observed)}
-function electric(r,tab=active){if(tab!=="campsites")return r.electric_hookups;return Array.isArray(amps(r,tab))&&amps(r,tab).some(n=>Number(n)>0)?true:null}
-function ratePresent(r){return [r.fees,r.metadata?.rate_notes,r.metadata?.published_nightly_rate_observation,r.metadata?.published_rate_observation,r.metadata?.campground_price_range,r.metadata?.campground_price_summary].some(present)}
+function setting(r){return r.metadata?.park_context||({inside:"Inside",outside:"Outside",nearby:"Nearby"}[r.metadata?.park_relationship])}
+function electric(r,tab=active){if(tab!=="campsites")return r.electric_hookups;return Array.isArray(amps(r,tab))&&amps(r,tab).some(n=>Number(n)>0)||/ ELECTRIC$/i.test(r.site_type||"")?true:/ NONELECTRIC$/i.test(r.site_type||"")?false:null}
+function ratePresent(r){return [r.metadata?.nightly_rate_usd,r.fees,r.metadata?.rate_notes,r.metadata?.published_nightly_rate_observation,r.metadata?.published_rate_observation,r.metadata?.campground_price_range,r.metadata?.campground_price_summary].some(present)}
 function missing(r,tab=active){
  const gaps=[];const need=(k,label,ok=present(get(r,k)))=>{if(!ok)gaps.push([k,label])};
  if(["national","state","units"].includes(tab)){need("description","Summary");need("official_url","Official link");need("region","State / region");}
@@ -51,7 +52,7 @@ function missing(r,tab=active){
   if(site)need("campground_id","Campground association");
   if(!site)need("electric_hookups","Electric",typeof electric(r,tab)==="boolean");
   if(!site){
-   const context=r.metadata?.park_context;
+   const context=setting(r);
    if(!present(r.park_id)&&!(["Transit","Not applicable"].includes(context)))need("park_id","Park association");
    if(present(r.park_id)&&!present(context))need("metadata.park_context","Park setting");
   }
@@ -59,7 +60,7 @@ function missing(r,tab=active){
   need(site?"sewer_hookup":"sewer_hookups","Sewer hookup",typeof get(r,site?"sewer_hookup":"sewer_hookups")==="boolean");
   if(!site)need("metadata.dump_station","Dump station",typeof r.metadata?.dump_station==="boolean");
   if(electric(r,tab)!==false)need(site?"electric_amps":"metadata.electric_amps","Amps",present(amps(r,tab)));
-  if(r.trailer_allowed!==false)need(site?"metadata.max_trailer_length_ft":"max_trailer_length_ft","Max trailer",Number(get(r,site?"metadata.max_trailer_length_ft":"max_trailer_length_ft"))>0);
+  if(r.trailer_allowed!==false)need(site?"metadata.max_trailer_length_ft":"max_trailer_length_ft","Max trailer",Number(site?(r.metadata?.max_trailer_length_ft??r.metadata?.equipment_max_lengths_ft?.Trailer):r.max_trailer_length_ft)>0);
   need("metadata.rate_notes","Rate",ratePresent(r));need("reservation_url","Booking link");
  }else if(tab==="attractions"){need("park_id","Park association");need("description","Summary");need("official_url","Official link");need("duration_minutes","Duration");}
  else {need("url","Source link");need("coverage_notes","Coverage notes");}
@@ -93,7 +94,7 @@ function trailer(r){
   return "Published limits: "+(lengths.length?(lengths.length===1?lengths[0]+" ft":lengths[0]+"–"+lengths[lengths.length-1]+" ft") :"none")+" · Unknown: "+unknown+" · Not allowed: "+blocked;
  }
  if(r.trailer_allowed===false)return "Trailers not allowed";
- const v=active==="campsites"?r.metadata?.max_trailer_length_ft:r.max_trailer_length_ft;
+ const v=active==="campsites"?(r.metadata?.max_trailer_length_ft??r.metadata?.equipment_max_lengths_ft?.Trailer):r.max_trailer_length_ft;
  if(Number(v)>0)return v+" ft";
  return "Unknown"+(active==="campsites"&&Number(r.max_equipment_length_ft)>0?" (equipment limit: "+r.max_equipment_length_ft+" ft)":"");
 }
@@ -112,12 +113,28 @@ function gapHTML(r,i){
  return own+'<details class="npt-cat-park-details"><summary>Campgrounds: '+linked.length+' · '+incomplete+' with missing fields</summary><div class="npt-cat-park-camps">'+camps+'</div></details>';
 }
 function summaryCell(r,k,i){
+ if(k==="inventory_counts"){
+  const m=r.metadata||{}, inventory=m.campsites||{}, imported=m.imported_site_counts||{};
+  const labels={totalSites:"Total",tentOnly:"Tent only",rvOnly:"RV only",group:"Group",horse:"Horse",walkBoatTo:"Walk/boat",other:"Other"};
+  const lines=Object.entries(labels).filter(([key])=>inventory[key]!=null&&inventory[key]!=="").map(([key,label])=>label+": "+inventory[key]);
+  const detail=Object.entries({tent_only:"Tent only",rv_or_motorhome_compatible:"RV/motorhome compatible",trailer_compatible:"Trailer compatible",cabins:"Cabins",group_sites:"Group"}).filter(([key])=>imported[key]!=null).map(([key,label])=>label+": "+imported[key]);
+  if(!lines.length&&!detail.length)return "Unknown";
+  return '<details><summary>'+esc(lines[0]||"Imported counts")+'</summary>'+esc(lines.join(" · "))+(detail.length?'<div>Imported sites (categories can overlap): '+esc(detail.join(" · "))+'</div>':'')+'</details>';
+ }
+ if(k==="site_rate"){
+  const m=r.metadata||{},price=m.nightly_rate_usd;
+  return price!=null&&price!==""&&Number.isFinite(Number(price))?esc(new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(Number(price)))+(m.rate_basis?'<small class="npt-cat-sub">'+esc(m.rate_basis)+'</small>':''):esc(m.rate_notes||"Unknown");
+ }
+ if(k==="fifth_wheel"){
+  const ft=r.metadata?.max_fifth_wheel_length_ft??r.metadata?.equipment_max_lengths_ft?.["FIFTH WHEEL"];
+  return Number(ft)>0?esc(ft)+" ft":"Unknown";
+ }
  if(k==="summary_name")return '<button class="npt-cat-name" data-edit="'+i+'">'+esc(r.name||r.site_number||"Unnamed")+'</button><small class="npt-cat-sub">'+esc([r.region,active==="campgrounds"?(r.campground_type||"Type unknown").replace(/_/g," "):active==="campsites"?r.site_type:null].filter(Boolean).join(" · "))+'</small>';
  if(k==="summary_park"){
   if(active==="attractions")return esc(parkLookupError?"Park lookup failed":(parksById[String(r.park_id)]?.name||"Park not linked"));
   if(active==="campsites")return esc(campgroundLookupError?"Campground lookup failed":(campgroundsById[String(r.campground_id)]?.label||"Campground not linked"));
-  const park=parksById[String(r.park_id)],context=r.metadata?.park_context;
-  const value=park?[park.name,context||"Setting unknown"].join(" · "):context||"Park / setting unknown";
+  const park=parksById[String(r.park_id)],context=setting(r);
+  const value=park?[park.name,context||"Setting unknown"].join(" · ")+(r.metadata?.entrance_road_miles!=null?" · "+r.metadata.entrance_road_miles+" road mi to "+(r.metadata.entrance_name||"entrance"):""):context||"Park / setting unknown";
   return '<button class="npt-cat-cell-edit" data-edit="'+i+'" data-focus="'+(context||park?"metadata.park_context":"park_id")+'">'+esc(value)+'</button>';
  }
  if(k==="summary_hookups")return parkTab()?'<details class="npt-cat-hookup-details"><summary>'+esc(hookups(r))+'</summary><ul>'+((campgroundsByPark[String(r.id)]||[]).map(c=>{
@@ -137,6 +154,8 @@ function summaryCell(r,k,i){
 for(const k of ["national","state","units","campsites"])defs[k].cols=[["summary_name",k==="campsites"?"Site / Type":"Name / Type"],["summary_hookups","Hookups"],["summary_trailer","Max trailer"],["missing","Missing info"]];
 defs.campgrounds.cols=[["summary_name","Campground / type"],["summary_park","Park / setting"],["summary_hookups","Hookups"],["summary_trailer","Max trailer"],["missing","Missing info"]];
 defs.campsites.cols=[["summary_name","Site / type"],["summary_park","Campground / park"],["summary_hookups","Hookups"],["summary_trailer","Max trailer"],["missing","Missing info"]];
+defs.campgrounds.cols.splice(2,0,["inventory_counts","Site counts"]);
+defs.campsites.cols.splice(-1,0,["fifth_wheel","Max fifth-wheel"],["site_rate","Nightly rate"]);
 defs.attractions.cols.push(["summary_park","Park"]);
 for(const k of ["attractions","sources"])defs[k].cols.push(["missing","Missing info"]);
 let editFields=[],editRow=null,quickEdit=false,loadId=0;
