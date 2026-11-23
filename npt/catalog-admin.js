@@ -4,7 +4,7 @@
 const $=s=>document.querySelector(s);
 const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const defs={
- national:{title:"National Parks",table:"npt_parks",pk:"id",search:"name",filter:q=>q.in("designation",["national_park","national_park_canada"]),cols:[["name","Park"],["region","Region"],["country","Country"],["official_url","Official link"]],fields:[
+ national:{title:"U.S. National Parks",table:"npt_parks",pk:"id",search:"name",filter:q=>q.eq("designation","national_park").eq("country","US"),cols:[["name","Park"],["region","Region"],["country","Country"],["official_url","Official link"]],fields:[
   ["name","Name","text",true],["designation","Designation","select",true,["national_park","national_park_canada","other"]],["region","State / region","text"],["country","Country","text",true],["latitude","Latitude","number"],["longitude","Longitude","number"],["official_url","Official URL","url"],["official_id","Agency ID","text"],["description","Description","textarea"],["source_key","Source key","text"],["source_record_id","Source record ID","text"],["metadata","Other metadata (JSON)","json",false,{}]
  ]},
  state:{title:"State Parks",table:"npt_parks",pk:"id",search:"name",filter:q=>q.eq("designation","state_park"),cols:[["name","Park"],["region","State"],["official_url","Official link"]],fields:[
@@ -134,17 +134,7 @@ function campLocation(c){
 function compactGaps(r,i){
  const items=missing(r).map(([key,label])=>'<button class="npt-cat-gap" data-edit="'+i+'" data-focus="'+esc(key)+'">'+esc(label)+'</button>');
  let total=missing(r,active,true).length;
- if(compactPark()){
-  const camps=campgroundsByPark[r.id]||[];
-  if(campgroundsLoadError||attractionError)return "Lookup unavailable";
-  const pending=camps.filter(c=>campLocation(c)==="unknown");
-  const parkFields=disclosure(items.length+"/"+total+" park fields",items);
-  const locationNotes=pending.map(c=>linkedName(c)+" · location unverified");
-  if(!camps.length)locationNotes.push("Campground inventory unverified");
-  if(!(attractionsByPark[r.id]||[]).length)locationNotes.push("Attraction inventory unverified");
-  const notes=locationNotes.length?'<div>'+disclosure(pending.length?pending.length+" unclassified campground"+(pending.length===1?"":"s"):"Inventory gaps",locationNotes)+'</div>':"";
-  return parkFields+notes;
- }
+ if(compactPark())return disclosure(items.length+"/"+total+" park fields",items);
  return disclosure(items.length+"/"+total,items);
 }
 function summaryCell(r,k,i){
@@ -154,7 +144,16 @@ function summaryCell(r,k,i){
   const attractions=k==="park_attractions";
   if(attractions?attractionError:campgroundsLoadError)return "Lookup unavailable";
   const records=attractions?(attractionsByPark[r.id]||[]):(campgroundsByPark[r.id]||[]).filter(c=>campLocation(c)===k);
-  return disclosure(records.length?String(records.length):"None recorded",records.map(c=>linkedName(c)+(k==="outside"?" · "+esc(c.metadata.entrance_road_miles)+" mi":"")));
+  const noun=attractions?"attraction":"campground";
+  const label=records.length?records.length+" "+noun+(records.length===1?"":"s"):"None recorded";
+  const confirmed=disclosure(label,records.map(c=>linkedName(c)+(k==="outside"?" · "+esc(c.metadata.entrance_road_miles)+" road mi":"")));
+  if(attractions)return confirmed;
+  const pending=(campgroundsByPark[r.id]||[]).filter(c=>{
+   if(campLocation(c)!=="unknown")return false;
+   const needsDistance=["outside","outside park","nearby"].includes(String(setting(c)||"").toLowerCase());
+   return k==="outside"?needsDistance:!needsDistance;
+  });
+  return confirmed+(pending.length?'<div>'+disclosure(pending.length+(k==="outside"?" awaiting road distance":" awaiting boundary check"),pending.map(c=>linkedName(c)))+'</div>':"");
  }
  if(k==="visit_details"){
   const items=[r.attraction_type,r.difficulty,r.duration_minutes!=null?r.duration_minutes+" min":null].filter(Boolean);
