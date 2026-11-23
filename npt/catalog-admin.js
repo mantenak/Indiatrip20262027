@@ -137,10 +137,13 @@ function compactGaps(r,i){
  if(compactPark()){
   const camps=campgroundsByPark[r.id]||[];
   if(campgroundsLoadError||attractionError)return "Lookup unavailable";
-  total+=2+camps.length;
-  if(!(attractionsByPark[r.id]||[]).length)items.push("Attraction inventory unverified");
-  if(!camps.length)items.push("Campground inventory unverified");
-  camps.filter(c=>campLocation(c)==="unknown").forEach(c=>items.push(linkedName(c)+" · setting or road distance"));
+  const pending=camps.filter(c=>campLocation(c)==="unknown");
+  const parkFields=disclosure(items.length+"/"+total+" park fields",items);
+  const locationNotes=pending.map(c=>linkedName(c)+" · location unverified");
+  if(!camps.length)locationNotes.push("Campground inventory unverified");
+  if(!(attractionsByPark[r.id]||[]).length)locationNotes.push("Attraction inventory unverified");
+  const notes=locationNotes.length?'<div>'+disclosure(pending.length?pending.length+" unclassified campground"+(pending.length===1?"":"s"):"Inventory gaps",locationNotes)+'</div>':"";
+  return parkFields+notes;
  }
  return disclosure(items.length+"/"+total,items);
 }
