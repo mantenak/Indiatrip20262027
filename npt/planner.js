@@ -68,7 +68,17 @@ function destinationField(){
    const table={site:'npt_campsites',campground:'npt_campgrounds',attraction:'npt_attractions'}[type];
    let search=db().from(table).select(type==='site'?'id,site_number,site_type,reservation_url,npt_campgrounds!inner(*)':'*');
    search=type==='site'?search.eq('site_number',term):search.ilike('name','%'+term.replace(/[%_]/g,'')+'%').not('latitude','is',null);
-   const matches=await query(search.limit(30));
+   let matches;
+   if(type==='attraction'){
+    const landmarkQuery=term.replace(/st\.?\s+louis\s+(?:gateway\s+)?arch/i,'Gateway Arch');
+    const pattern='%'+landmarkQuery.replace(/[%_]/g,'')+'%';
+    const base=()=>db().from(table).select('*').not('latitude','is',null).not('longitude','is',null).not('name','ilike','%wellness challenge%');
+    const [landmarks,other]=await Promise.all([
+     query(base().eq('attraction_type','landmark').ilike('name',pattern).order('name').limit(30)),
+     query(base().ilike('name',pattern).order('name').limit(30))
+    ]);
+    matches=[...new Map([...landmarks,...other].map(place=>[place.id,place])).values()];
+   }else matches=await query(search.limit(30));
    if(token!==request||!box.isConnected)return;
    for(const row of matches){
     const place=type==='site'?row.npt_campgrounds:row;
