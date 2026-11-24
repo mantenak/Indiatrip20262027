@@ -72,19 +72,32 @@ function destinationField(){
    if(type==='attraction'){
     const landmarkQuery=term.replace(/st\.?\s+louis\s+(?:gateway\s+)?arch/i,'Gateway Arch');
     const pattern='%'+landmarkQuery.replace(/[%_]/g,'')+'%';
-    const base=()=>db().from(table).select('*').not('latitude','is',null).not('longitude','is',null).not('name','ilike','%wellness challenge%');
-    const [landmarks,other]=await Promise.all([
-     query(base().eq('attraction_type','landmark').ilike('name',pattern).order('name').limit(30)),
-     query(base().ilike('name',pattern).order('name').limit(30))
+    const mapped=tableName=>db().from(tableName).select('*').not('latitude','is',null).not('longitude','is',null);
+    const [landmarks,parks,activities]=await Promise.all([
+     query(mapped(table).eq('attraction_type','landmark').ilike('name',pattern).order('name').limit(30)),
+     query(mapped('npt_parks').ilike('name',pattern).order('name').limit(40)),
+     query(mapped(table).ilike('name',pattern).order('name').limit(80))
     ]);
-    matches=[...new Map([...landmarks,...other].map(place=>[place.id,place])).values()];
+    const program=/junior ranger|wellness challenge|with the nps app|virtual tour|scavenger hunt|digital badge/i;
+    const places=[...landmarks,...parks,...activities].filter(place=>!program.test(place.name));
+    const words=landmarkQuery.toLowerCase().trim();
+    function rank(place){
+     const name=place.name.toLowerCase();
+     if(name===words)return 0;
+     if(name.startsWith(words)&&place.attraction_type==='landmark')return 1;
+     if(name.startsWith(words))return 2;
+     if(place.attraction_type==='landmark'||place.designation)return 3;
+     return 4;
+    }
+    const distinct=[...new Map(places.map(place=>[place.id,place])).values()];
+    matches=distinct.sort((a,b)=>rank(a)-rank(b)||a.name.localeCompare(b.name)).slice(0,30);
    }else matches=await query(search.limit(30));
    if(token!==request||!box.isConnected)return;
    for(const row of matches){
     const place=type==='site'?row.npt_campgrounds:row;
     if(place?.latitude==null||place.longitude==null)continue;
     const name=type==='site'?place.name+' · Site '+row.site_number:place.name;
-    option({name,point:C.point(place),park:{id:null,name,latitude:place.latitude,longitude:place.longitude},type,place,site:type==='site'?{id:row.id,number:row.site_number,url:row.reservation_url}:null},[name,place.region].filter(Boolean).join(' · '));
+    option({name,point:C.point(place),park:{id:null,name,latitude:place.latitude,longitude:place.longitude},type,place,site:type==='site'?{id:row.id,number:row.site_number,url:row.reservation_url}:null},[name,place.region||place.metadata?.region].filter(Boolean).join(' · '));
    }
    if(!results.children.length)results.textContent='No mapped matches. Try another search.';
    return;
