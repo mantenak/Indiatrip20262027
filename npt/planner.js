@@ -57,8 +57,7 @@ async function attractionCandidates(point,radius=50,term=''){
   .gte('longitude',point[1]-lonDelta).lte('longitude',point[1]+lonDelta);
  if(term)request=request.ilike('name','%'+term.replace(/[%_]/g,'')+'%');
  const rows=await query(request.order('name').limit(500));
- return rows.filter(roadTripPlace).filter(place=>C.miles(point,C.point(place))<=radius)
-  .sort((left,right)=>C.miles(point,C.point(left))-C.miles(point,C.point(right)));
+ return rankAttractions(rows.filter(place=>C.miles(point,C.point(place))<=radius),term,point);
 }
 window.openNptPlanner=async function(trip=null){
  if(!window.nptCloud?.signedIn()){window.startWizard();return;}
@@ -69,11 +68,33 @@ window.openNptPlanner=async function(trip=null){
 function roadTripPlace(place){
  if(place.latitude==null||place.longitude==null)return false;
  const name=place.name||'';
- if(/\b(junior ranger|challenge|app|virtual|scavenger hunt|badge|webinar|volunteer|lesson plan|worksheet|podcast|online|fitness program)\b/i.test(name))return false;
+ if(/\b(junior ranger|challenge|app|virtual|scavenger hunt|badge|webinar|volunteer|lesson plan|worksheet|podcast|online|fitness program|film screening|webcast|ranger program)\b/i.test(name))return false;
  if(place.metadata?.coverage_status==='inventory_record_needs_agency_validation')return false;
  if(['national_park','national_park_canada','state_park'].includes(place.designation))return true;
  if(/^(landmark|museum|viewpoint|attraction|monument|memorial|waterfall|peak|trailhead|castle|ruins|dam|gallery|lighthouse|archaeological_site)$/i.test(place.attraction_type||place.category||''))return true;
- return /\b(arch|hike|hiking|trail|museum|overlook|viewpoint|trailhead|waterfall|lighthouse|visitor cent(?:er|re)|historic site|national monument|national memorial|scenic drive|observation deck|courthouse|battlefield|botanical garden)\b/i.test(name);
+ return /\b(arch|falls|geyser|canyon|caverns?|caves?|summit|lakes?|beach|monument|memorial|hike|hiking|trails?|museum|overlook|viewpoint|trailhead|waterfall|lighthouse|visitor cent(?:er|re)|historic site|national monument|national memorial|scenic drive|observation deck|courthouse|battlefield|botanical garden)\b/i.test(name);
+}
+function attractionWords(value){
+ return String(value||'').normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().match(/[\p{L}\p{N}]+/gu)||[];
+}
+function rankAttractions(rows,term='',point=null){
+ const words=attractionWords(term),seen=new Set();
+ const eligible=rows.filter(place=>{
+  if(!roadTripPlace(place))return false;
+  const title=attractionWords(place.name);
+  if(!words.every(word=>title.includes(word)))return false;
+  const key=[place.park_id||place.id,...title].join('|');
+  if(seen.has(key))return false;
+  seen.add(key);return true;
+ });
+ function priority(place){
+  if(words.length&&attractionWords(place.name).join(' ')===words.join(' '))return 0;
+  if(place.attraction_type==='landmark')return 1;
+  if(place.designation)return 2;
+  if(/^(visit|explore|hike|tour|ride|see|discover)\b/i.test(place.name))return 4;
+  return 3;
+ }
+ return eligible.sort((a,b)=>priority(a)-priority(b)||(point?C.miles(point,C.point(a))-C.miles(point,C.point(b)):0)||a.name.localeCompare(b.name));
 }
 function destinationField(){
  const states='AL:Alabama|AK:Alaska|AZ:Arizona|AR:Arkansas|CA:California|CO:Colorado|CT:Connecticut|DE:Delaware|FL:Florida|GA:Georgia|HI:Hawaii|ID:Idaho|IL:Illinois|IN:Indiana|IA:Iowa|KS:Kansas|KY:Kentucky|LA:Louisiana|ME:Maine|MD:Maryland|MA:Massachusetts|MI:Michigan|MN:Minnesota|MS:Mississippi|MO:Missouri|MT:Montana|NE:Nebraska|NV:Nevada|NH:New Hampshire|NJ:New Jersey|NM:New Mexico|NY:New York|NC:North Carolina|ND:North Dakota|OH:Ohio|OK:Oklahoma|OR:Oregon|PA:Pennsylvania|RI:Rhode Island|SC:South Carolina|SD:South Dakota|TN:Tennessee|TX:Texas|UT:Utah|VT:Vermont|VA:Virginia|WA:Washington|WV:West Virginia|WI:Wisconsin|WY:Wyoming'.split('|').map(x=>{const [code,name]=x.split(':');return {code,name};});
@@ -99,22 +120,7 @@ function destinationField(){
      query(mapped('npt_parks').in('designation',parkDesignations).ilike('name',pattern).order('name').limit(40)),
      query(parkAttractions().ilike('name',pattern).order('name').limit(80))
     ]);
-    const tokens=value=>value.toLowerCase().normalize('NFD').replace(/\p{M}/gu,'').match(/[\p{L}\p{N}]+/gu)||[];
-    const words=tokens(landmarkQuery);
-    const relevant=place=>{
-     const title=tokens(place.name);
-     return words.length>0 && words.every(word=>title.includes(word));
-    };
-    const places=[...landmarks,...parks,...activities].filter(roadTripPlace).filter(relevant);
-    const rank=place=>place.name.toLowerCase()===landmarkQuery.toLowerCase()?0:
-     place.attraction_type==='landmark'?1:place.designation?2:3;
-    places.sort((a,b)=>rank(a)-rank(b)||a.name.localeCompare(b.name));
-    const seen=new Set();
-    matches=places.filter(place=>{
-     const key=[place.park_id||place.id,...tokens(place.name)].join('|');
-     if(seen.has(key))return false;
-     seen.add(key);return true;
-    }).slice(0,15);
+    matches=rankAttractions([...landmarks,...parks,...activities],landmarkQuery).slice(0,15);
    }else matches=await query(search.limit(30));
    if(token!==request||!box.isConnected)return;
    for(const row of matches){
@@ -204,7 +210,7 @@ async function campsNear(point,radius=30){const rows=await query(db().rpc('npt_n
 async function createStop(park){
  const camps=await campsNear(C.point(park),50),fits=camps.filter(c=>{const f=C.fit(c,model.basics.vehicle);return f.ok&&!f.unknown;});
  fits.sort((a,b)=>Number(C.fit(a,model.basics.vehicle).unknown)-Number(C.fit(b,model.basics.vehicle).unknown)||(a.park_id===park.id?-1:0)-(b.park_id===park.id?-1:0)||a.distance_miles-b.distance_miles);
- const activities=park.id?(await query(parkAttractions().eq('park_id',park.id).order('latitude',{ascending:false,nullsFirst:false}).limit(100))).filter(roadTripPlace).slice(0,10):[];
+ const activities=park.id?rankAttractions(await query(parkAttractions().eq('park_id',park.id).order('latitude',{ascending:false,nullsFirst:false}).limit(1000))).slice(0,10):[];
  return {park,nights:2,campground:fits[0]||null,activities:activities.slice(0,5),options:activities,notes:''};
 }
 function stopPoint(s){return s.campground?.latitude!=null&&s.campground?.longitude!=null?C.point(s.campground):C.point(s.park);}
