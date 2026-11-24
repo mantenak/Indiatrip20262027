@@ -57,10 +57,28 @@ window.openNptPlanner=async function(trip=null){
 function destinationField(){
  const states='AL:Alabama|AK:Alaska|AZ:Arizona|AR:Arkansas|CA:California|CO:Colorado|CT:Connecticut|DE:Delaware|FL:Florida|GA:Georgia|HI:Hawaii|ID:Idaho|IL:Illinois|IN:Indiana|IA:Iowa|KS:Kansas|KY:Kentucky|LA:Louisiana|ME:Maine|MD:Maryland|MA:Massachusetts|MI:Michigan|MN:Minnesota|MS:Mississippi|MO:Missouri|MT:Montana|NE:Nebraska|NV:Nevada|NH:New Hampshire|NJ:New Jersey|NM:New Mexico|NY:New York|NC:North Carolina|ND:North Dakota|OH:Ohio|OK:Oklahoma|OR:Oregon|PA:Pennsylvania|RI:Rhode Island|SC:South Carolina|SD:South Dakota|TN:Tennessee|TX:Texas|UT:Utah|VT:Vermont|VA:Virginia|WA:Washington|WV:West Virginia|WI:Wisconsin|WY:Wyoming'.split('|').map(x=>{const [code,name]=x.split(':');return {code,name};});
  const box=el('div'),q=input('search','',{placeholder:'Michigan, Glacier, Custer…',autocomplete:'off','aria-label':'Destination (optional)'}),results=el('div',null,{class:'np-location-results','aria-live':'polite'});let chosen=null,timer,request=0;
- box.append(field('Where would you like to go? (optional)',q),el('small','Choose a state, national park, or state park. Leave blank to discover a route.'),results);
+ const kind=select([['park','Park or state'],['attraction','Attraction'],['campground','Campground'],['site','Individual campsite']],'park');
+ box.append(field('Build a trip around',kind),field('Find a place',q),results);
+ kind.onchange=()=>{q.value='';q.placeholder=kind.value==='site'?'Enter a site number':'Search by name';q.oninput();q.focus();};
  function option(value,label){results.append(btn(label,()=>{chosen=value;q.value=value.name;request++;results.replaceChildren(el('small','Destination selected'));}));}
- q.oninput=()=>{chosen=null;clearTimeout(timer);const token=++request,term=q.value.trim();results.replaceChildren();if(term.length<2)return;
+ q.oninput=()=>{chosen=null;clearTimeout(timer);const token=++request,term=q.value.trim();results.replaceChildren();if(term.length<(kind.value==='site'?1:2))return;
  timer=setTimeout(async()=>{try{
+  if(kind.value!=='park'){
+   const type=kind.value;
+   const table={site:'npt_campsites',campground:'npt_campgrounds',attraction:'npt_attractions'}[type];
+   let search=db().from(table).select(type==='site'?'id,site_number,site_type,reservation_url,npt_campgrounds!inner(*)':'*');
+   search=type==='site'?search.eq('site_number',term):search.ilike('name','%'+term.replace(/[%_]/g,'')+'%').not('latitude','is',null);
+   const matches=await query(search.limit(30));
+   if(token!==request||!box.isConnected)return;
+   for(const row of matches){
+    const place=type==='site'?row.npt_campgrounds:row;
+    if(place?.latitude==null||place.longitude==null)continue;
+    const name=type==='site'?place.name+' · Site '+row.site_number:place.name;
+    option({name,point:C.point(place),park:{id:null,name,latitude:place.latitude,longitude:place.longitude},type,place,site:type==='site'?{id:row.id,number:row.site_number,url:row.reservation_url}:null},[name,place.region].filter(Boolean).join(' · '));
+   }
+   if(!results.children.length)results.textContent='No mapped matches. Try another search.';
+   return;
+  }
   const rows=await query(db().from('npt_parks').select('id,name,region,latitude,longitude,designation,official_url').in('designation',['national_park','national_park_canada','state_park']).ilike('name','%'+term.replace(/[%_]/g,'')+'%').not('latitude','is',null).order('name').limit(12));
   if(token!==request||!box.isConnected)return;results.replaceChildren();
   states.filter(x=>x.name.toLowerCase().includes(term.toLowerCase())||x.code.toLowerCase()===term.toLowerCase()).forEach(x=>option(x,x.name+' · State'));
@@ -76,10 +94,10 @@ function showForm(){
  const vehicle=select([['car','Car + tent'],['campervan','Campervan'],['motorhome','Motorhome'],['fifthWheel','Fifth wheel'],['trailer','Travel trailer']],'car'),length=input('number',30,{min:1,max:100,step:.1}),lenField=field('RV / trailer length (feet)',length);lenField.hidden=true;vehicle.onchange=()=>{lenField.hidden=vehicle.value==='car';length.required=vehicle.value!=='car';};
  const distance=input('number',250,{min:25,max:600,step:1}),hours=input('number','',{min:1,max:12,step:.5}),parkType=select([['national','National parks first'],['both','National and state parks']],'national');
  same.onchange=()=>end.box.hidden=same.checked;
- grid.append(field('Trip name (optional)',name),field('How many days?',days),field('Departure date',date),field('Vehicle',vehicle),lenField,field('Preferred driving distance between stops (miles, optional if hours are set)',distance),field('Park preference',parkType),start.box,end.box);
- const destination=destinationField();grid.append(destination.box);
+ grid.append(field('How many days?',days),field('Departure date',date),field('Vehicle',vehicle),lenField,start.box,end.box);
+ const destination=destinationField();grid.prepend(destination.box);
  const discovery=preTripSearch(start,destination,vehicle,length);
- const advanced=el('details');advanced.append(el('summary','Advanced preferences'),field('Maximum driving hours per day (optional)',hours));
+ const advanced=el('details');advanced.append(el('summary','Trip name and driving preferences'),field('Trip name (optional)',name),field('Preferred driving distance (miles)',distance),field('Park preference',parkType),field('Maximum driving hours per day (optional)',hours));
  const sameLabel=el('label',null,{class:'np-check'});sameLabel.append(same,' Return to my starting point');
  form.append(el('h3','A few details. A whole trip to explore.'),el('p','Add the parks, campgrounds, and attractions you want, or leave the shortlist empty and let us suggest a route. Review and edit every stop before saving.',{class:'np-muted'}),grid,sameLabel,advanced,discovery.box,el('p','Address search uses the U.S. Census Bureau and OpenStreetMap. Confirm the selected location or adjust its map pin. Driving roads and distances load automatically for your proposal.',{class:'np-muted'}));
  const submit=el('button','Build my trip',{type:'submit',class:'btn primary'});form.append(status,submit);body.append(form);
@@ -102,7 +120,13 @@ function showForm(){
   chosen=[anchor,...C.chooseParks(near,C.point(anchor),basics.end.point,Math.max(2,basics.days-Math.ceil(transit*1.3/planningDistance)),basics.hours,planningDistance)].slice(0,Math.min(8,basics.days-1));
  }
  if(!chosen.length)throw Error('No catalog route fits those driving preferences. Increase the distance or choose a closer ending point.');
- model={version:1,basics,stops:[],route:null};for(const p of chosen){say('Finding stays and attractions near '+p.name+'…');model.stops.push(await createStop(p));}
+ model={version:1,basics,stops:[],route:null};for(const p of chosen){say('Finding stays and attractions near '+p.name+'…');const stop=await createStop(p);
+  const anchor=basics.destination;
+  if(anchor?.type && p===anchor.park){
+   if(anchor.type==='attraction'){stop.activities=[anchor.place];stop.options=[anchor.place];}
+   else {stop.campground=anchor.place;stop.selectedCamp=true;if(anchor.site){stop.selectedSite=anchor.site;stop.notes='Preferred campsite: '+anchor.name;}}
+  }
+  model.stops.push(stop);}
  const selected=discovery.selected;for(const camp of selected.filter(x=>x.kind==='campground').map(x=>x.place)){const nearby=model.stops.map(s=>({s,d:C.miles(C.point(s.park),C.point(camp))})).filter(x=>!x.s.selectedCamp).sort((a,b)=>a.d-b.d);if(nearby[0]&&nearby[0].d<=100){nearby[0].s.campground=camp;nearby[0].s.selectedCamp=true;}else model.stops.push({park:{id:null,name:camp.name,region:camp.region,latitude:camp.latitude,longitude:camp.longitude},nights:1,campground:camp,activities:[],options:[],notes:'Selected before building the itinerary.'});}
  for(const address of selected.filter(x=>x.kind==='address').map(x=>x.place)){model.stops.push({park:{id:null,name:address.name,region:address.region,latitude:address.latitude,longitude:address.longitude},nights:1,kind:'address',addressOnly:true,campground:null,activities:[],options:[],notes:'Address stop selected before building the itinerary.'});}
  for(const attraction of selected.filter(x=>x.kind==='attraction').map(x=>x.place)){const exists=model.stops.some(s=>s.park?.name?.toLowerCase()===attraction.name.toLowerCase()||s.activities?.some(a=>a.name?.toLowerCase()===attraction.name.toLowerCase()));if(exists)continue;model.stops.push({park:{id:null,name:attraction.name,region:attraction.region,latitude:attraction.latitude,longitude:attraction.longitude,official_url:attraction.official_url},nights:0,campground:null,activities:[attraction],options:[attraction],attractionOnly:true,notes:'Must-stop attraction selected before building the itinerary.'});}
