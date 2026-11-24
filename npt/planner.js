@@ -73,7 +73,7 @@ function roadTripPlace(place){
  if(place.metadata?.coverage_status==='inventory_record_needs_agency_validation')return false;
  if(['national_park','national_park_canada','state_park'].includes(place.designation))return true;
  if(/^(landmark|museum|viewpoint|attraction|monument|memorial|waterfall|peak|trailhead|castle|ruins|dam|gallery|lighthouse|archaeological_site)$/i.test(place.attraction_type||place.category||''))return true;
- return /\b(hike|hiking|trail|museum|overlook|viewpoint|trailhead|waterfall|lighthouse|visitor cent(?:er|re)|historic site|national monument|national memorial|scenic drive|observation deck|courthouse|battlefield|botanical garden)\b/i.test(name);
+ return /\b(arch|hike|hiking|trail|museum|overlook|viewpoint|trailhead|waterfall|lighthouse|visitor cent(?:er|re)|historic site|national monument|national memorial|scenic drive|observation deck|courthouse|battlefield|botanical garden)\b/i.test(name);
 }
 function destinationField(){
  const states='AL:Alabama|AK:Alaska|AZ:Arizona|AR:Arkansas|CA:California|CO:Colorado|CT:Connecticut|DE:Delaware|FL:Florida|GA:Georgia|HI:Hawaii|ID:Idaho|IL:Illinois|IN:Indiana|IA:Iowa|KS:Kansas|KY:Kentucky|LA:Louisiana|ME:Maine|MD:Maryland|MA:Massachusetts|MI:Michigan|MN:Minnesota|MS:Mississippi|MO:Missouri|MT:Montana|NE:Nebraska|NV:Nevada|NH:New Hampshire|NJ:New Jersey|NM:New Mexico|NY:New York|NC:North Carolina|ND:North Dakota|OH:Ohio|OK:Oklahoma|OR:Oregon|PA:Pennsylvania|RI:Rhode Island|SC:South Carolina|SD:South Dakota|TN:Tennessee|TX:Texas|UT:Utah|VT:Vermont|VA:Virginia|WA:Washington|WV:West Virginia|WI:Wisconsin|WY:Wyoming'.split('|').map(x=>{const [code,name]=x.split(':');return {code,name};});
@@ -99,18 +99,22 @@ function destinationField(){
      query(mapped('npt_parks').in('designation',parkDesignations).ilike('name',pattern).order('name').limit(40)),
      query(parkAttractions().ilike('name',pattern).order('name').limit(80))
     ]);
-    const places=[...landmarks,...parks,...activities].filter(roadTripPlace);
-    const words=landmarkQuery.toLowerCase().trim();
-    function rank(place){
-     const name=place.name.toLowerCase();
-     if(name===words)return 0;
-     if(name.startsWith(words)&&place.attraction_type==='landmark')return 1;
-     if(name.startsWith(words))return 2;
-     if(place.attraction_type==='landmark'||place.designation)return 3;
-     return 4;
-    }
-    const distinct=[...new Map(places.map(place=>[place.id,place])).values()];
-    matches=distinct.sort((a,b)=>rank(a)-rank(b)||a.name.localeCompare(b.name)).slice(0,30);
+    const tokens=value=>value.toLowerCase().normalize('NFD').replace(/\p{M}/gu,'').match(/[\p{L}\p{N}]+/gu)||[];
+    const words=tokens(landmarkQuery);
+    const relevant=place=>{
+     const title=tokens(place.name);
+     return words.length>0 && words.every(word=>title.includes(word));
+    };
+    const places=[...landmarks,...parks,...activities].filter(roadTripPlace).filter(relevant);
+    const rank=place=>place.name.toLowerCase()===landmarkQuery.toLowerCase()?0:
+     place.attraction_type==='landmark'?1:place.designation?2:3;
+    places.sort((a,b)=>rank(a)-rank(b)||a.name.localeCompare(b.name));
+    const seen=new Set();
+    matches=places.filter(place=>{
+     const key=[place.park_id||place.id,...tokens(place.name)].join('|');
+     if(seen.has(key))return false;
+     seen.add(key);return true;
+    }).slice(0,15);
    }else matches=await query(search.limit(30));
    if(token!==request||!box.isConnected)return;
    for(const row of matches){
