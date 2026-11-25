@@ -28,20 +28,19 @@
 @media(max-width:720px){.top{padding:9px 12px}.topin{flex-wrap:wrap;gap:9px}.npt-brand{font-size:18px}.npt-brand .npt-logo{width:58px;height:58px}.topactions{gap:5px}.topbtn{font-size:12px}.np-editor-brand{gap:9px;flex-wrap:wrap}.np-editor-brand img{width:52px;height:52px}.np-editor-brand-name{font-size:16px}.np-editor-brand h2{font-size:17px}.np-head{align-items:center}}
 @media(max-width:470px){.topactions{width:100%;justify-content:flex-end}.np-editor-brand h2{width:100%;padding:0;border:0}.np-editor-brand img{width:48px;height:48px}}
 
-/* The public landing page gets a larger brand treatment inside its own panel. */
 .npt-home-brand {
-  display: grid;
-  place-items: center;
-  padding: clamp(24px, 5vw, 48px) 16px;
+  height: clamp(200px, 35vw, 348px);
+  overflow: hidden;
   margin-bottom: 24px;
   border-radius: 16px;
-  background: #eaf1eb;
+  background: #314438;
 }
 .npt-home-brand img {
   display: block;
-  width: clamp(148px, 24vw, 252px);
-  height: auto;
-  border-radius: 14px;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
 }
 #publicSection .sectionhead h3 {
   font-size: 1rem;
