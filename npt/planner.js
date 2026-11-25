@@ -59,11 +59,23 @@ async function attractionCandidates(point,radius=50,term=''){
  const rows=await query(request.order('name').limit(500));
  return rankAttractions(rows.filter(place=>C.miles(point,C.point(place))<=radius),term,point);
 }
-window.openNptPlanner=async function(trip=null){
+window.openNptPlanner=async function(trip=null,replacement=null){
  if(!window.nptCloud?.signedIn()){window.startWizard();return;}
  window.closeNptWalk?.();window.showHome?.();
  editing=trip;dirty=false;model=trip?.preferences?.planner?JSON.parse(JSON.stringify(trip.preferences.planner)):trip?C.fromTrip(window.nptCloud.editorSource(trip)):null;geometry=null;op++;shell(trip?'Edit itinerary':'Plan a new trip');
- if(model){await render();return;}showForm();
+ if(!model){showForm();return;}
+ const segmentIndex=replacement?(trip.segments||[]).findIndex(segment=>
+  String(segment.sequence)===String(replacement.segment)&&segment.campground===replacement.name):-1;
+ const candidate=model.stops[segmentIndex];
+ const target=candidate?.campground?.name===replacement?.name?candidate:null;
+ if(target){expandedStops.add(target);focusStop=target;}
+ const editorOp=op;
+ await render();
+ if(!replacement||!root||editorOp!==op)return;
+ const row=target&&Array.from(root.querySelectorAll('.np-list-stop')).find(article=>article._nptStop===target);
+ if(row)await run(()=>campSearch(target,row.querySelector('.np-stop-detail'),true));
+ else say('The selected campground could not be matched to an itinerary stop. Expand the intended stop to search nearby.');
+
 };
 function roadTripPlace(place){
  if(place.latitude==null||place.longitude==null)return false;
@@ -301,7 +313,7 @@ function drawMap(info){if(!map)return;const L=window.L;layer.clearLayers();const
 }
 async function route(redraw=true){const routeModel=model,routeOp=op;say('Calculating the driving route…');const pts=[model.basics.start.point,...resolvedStops().map(stopPoint),model.basics.end.point];const data=await json('https://routing.openstreetmap.de/routed-car/route/v1/driving/'+pts.map(p=>`${p[1]},${p[0]}`).join(';')+'?overview=simplified&geometries=geojson&steps=true');if(data.code!=='Ok'||!data.routes?.[0]||data.routes[0].legs.length!==pts.length-1)throw Error('No road route found. Try replacing a stop or campground.');if(!root||model!==routeModel||op!==routeOp)return;const r=data.routes[0];model.route={legGeometry:r.legs.map(l=>l.steps.flatMap(s=>s.geometry.coordinates.map(p=>[p[1],p[0]]))),legs:r.legs.map(l=>({distance:l.distance,duration:l.duration})),geometry:r.geometry.coordinates.map(p=>[p[1],p[0]]),calculatedAt:new Date().toISOString()};geometry=model.route.geometry;dirty=true;if(redraw){await render();say('Road route calculated. Highlighted legs exceed your driving preferences.');}}
 function activityEditor(s,card){card.querySelector('.np-activity-editor')?.remove();const box=el('div',null,{class:'np-search np-activity-editor'});box.append(el('h4','Attractions at this stop'));for(const a of s.options||[]){const check=input('checkbox');check.checked=s.activities.some(x=>x.id===a.id);const label=el('label',null,{class:'np-check'});label.append(check,' '+a.name);box.append(label);check.onchange=()=>{s.activities=check.checked?[...s.activities,a]:s.activities.filter(x=>x.id!==a.id);dirty=true;};}box.append(btn('Done',()=>run(render)));card.append(box);box.scrollIntoView({block:'nearest'});}
-async function campSearch(s,card){card.querySelector('.np-camp-search')?.remove();const box=el('div',null,{class:'np-search np-camp-search'}),q=input('search','',{placeholder:'Filter nearby results by name or brand','aria-label':'Campground name or brand'}),radius=select([['15','Within 15 miles'],['30','Within 30 miles'],['50','Within 50 miles'],['100','Within 100 miles']],'30'),full=input('checkbox'),unknown=input('checkbox');unknown.checked=true;radius.setAttribute('aria-label','Campground search distance');const results=el('div'),msg=el('p','Searching nearby…',{role:'status'});box.append(el('h4','Campgrounds near '+s.park.name),q,radius);for(const [x,label] of [[full,'Full hookups only'],[unknown,'Include sites with unconfirmed equipment fit']]){const l=el('label',null,{class:'np-check'});l.append(x,' '+label);box.append(l);}box.append(msg,results,link('Map data © OpenStreetMap contributors','https://www.openstreetmap.org/copyright'));card.append(box);let found=[],coverage='';
+async function campSearch(s,card,replacing=false){card.querySelector('.np-camp-search')?.remove();const box=el('div',null,{class:'np-search np-camp-search'}),q=input('search','',{placeholder:'Filter nearby results by name or brand','aria-label':'Campground name or brand'}),radius=select([['15','Within 15 miles'],['30','Within 30 miles'],['50','Within 50 miles'],['100','Within 100 miles']],'30'),full=input('checkbox'),unknown=input('checkbox');unknown.checked=true;radius.setAttribute('aria-label','Campground search distance');const results=el('div'),msg=el('p','Searching nearby…',{role:'status'});box.append(el('h4',replacing?'Replace '+s.campground.name+' · Campgrounds near '+(s.park.region||s.park.name):'Campgrounds near '+s.park.name),q,radius);for(const [x,label] of [[full,'Full hookups only'],[unknown,'Include sites with unconfirmed equipment fit']]){const l=el('label',null,{class:'np-check'});l.append(x,' '+label);box.append(l);}box.append(msg,results,link('Map data © OpenStreetMap contributors','https://www.openstreetmap.org/copyright'));card.append(box);let found=[],coverage='';
  function show(){results.replaceChildren();const filtered=found.filter(c=>{const fit=C.fit(c,model.basics.vehicle);return fit.ok&&(unknown.checked||!fit.unknown)&&(!full.checked||c.electric_hookups&&c.water_hookups&&c.sewer_hookups)&&[c.name,c.operator,c.metadata?.brand].join(' ').toLowerCase().includes(q.value.toLowerCase());});msg.textContent=(filtered.length?`${filtered.length} nearby options · ${found.length-filtered.length} hidden by filters. `:'No matches with these filters. ')+coverage+' Distances are by road when available; unknown distances are not confirmed within range. Map listings do not confirm RV fit or availability.';for(const c of filtered){const r=el('div',null,{class:'np-result'});r.append(el('h4',c.name),el('p',`${c.road_miles==null?'Road distance unavailable':c.road_miles.toFixed(1)+' road miles'} · ${C.hookups(c)}`),el('p',C.fit(c,model.basics.vehicle).label),link(c.official_url||c.reservation_url?'Official information':'Map listing',c.reservation_url||c.official_url||c.metadata?.source_url),btn('Use this campground',()=>run(async()=>{s.campground=c;changed();await render();say('Campground replaced. Driving distances updated where road routing is available.');})));if(c.metadata?.amenities?.length)r.append(el('p','Listed amenities: '+c.metadata.amenities.join(' · ')));if(c.metadata?.maxstay)r.append(el('p','Maximum stay listed: '+c.metadata.maxstay));if(c.metadata?.opening_hours)r.append(el('p','Hours: '+c.metadata.opening_hours));if(c.phone)r.append(el('p','Phone: '+c.phone));if(c.metadata?.stay_restrictions)r.append(el('p',c.metadata.stay_restrictions,{class:'np-warning'}));results.append(r);}}
  async function search(){
  lock(true);msg.textContent='Searching catalog and mapped campgrounds…';results.replaceChildren();const point=stopPoint(s),range=Number(radius.value);
@@ -311,13 +323,18 @@ async function campSearch(s,card){card.querySelector('.np-camp-search')?.remove(
  coverage=sources.every(x=>x.status==='fulfilled')?'Catalog + OpenStreetMap results (up to 100 mapped listings; coverage varies).':sources.every(x=>x.status==='rejected')?'Both search services are unavailable. Please retry.':sources[1].status==='rejected'?'Live map search unavailable; showing catalog results only.':'Catalog unavailable; showing map listings only.';
  msg.textContent='Found '+found.length+' listings. Calculating road distances…';
  for(let offset=0,resolvedIndex=0;offset<found.length;offset+=40){const batch=found.slice(offset,offset+40),pts=[point,...batch.map(C.point)];try{const d=await json('https://routing.openstreetmap.de/routed-car/table/v1/driving/'+pts.map(p=>p[1]+','+p[0]).join(';')+'?sources=0&annotations=distance');batch.forEach((c,i)=>{const m=d.distances?.[0]?.[i+1];c.road_miles=m==null?null:m/1609.344;});}catch{batch.forEach(c=>c.road_miles=null);}}
- found=found.filter(c=>c.road_miles==null||c.road_miles<=range).sort((a,b)=>(a.road_miles??Infinity)-(b.road_miles??Infinity));show();
+ found=found.filter(c=>{
+  const current=s.campground;
+  const sameCampground=current&&((current.id&&current.id===c.id)||
+   (current.name.toLowerCase()===c.name.toLowerCase()&&C.miles(point,C.point(c))<.5));
+  return !(replacing&&sameCampground)&&(c.road_miles==null||c.road_miles<=range);
+ }).sort((a,b)=>(a.road_miles??Infinity)-(b.road_miles??Infinity));show();
  }radius.onchange=()=>run(search);q.oninput=show;full.onchange=show;unknown.onchange=show;await search();box.scrollIntoView({block:'nearest'});
 }
 function parkSearch(host){host.querySelector('.np-park-search')?.remove();const box=el('div',null,{class:'np-search np-park-search'}),q=input('search','',{placeholder:'Search national or state parks','aria-label':'Park name'}),results=el('div');box.append(q,btn('Find park stop',()=>run(async()=>{if(q.value.trim().length<2)throw Error('Enter at least two letters.');const rows=await query(db().from('npt_parks').select('id,name,region,latitude,longitude,designation,official_url').in('designation',['national_park','national_park_canada','state_park']).ilike('name','%'+q.value.trim()+'%').not('latitude','is',null).limit(20));results.replaceChildren();for(const p of rows.filter(p=>!model.stops.some(s=>s.park.id===p.id)))results.append(btn(`${p.name} · ${p.region||''}`,()=>run(async()=>{if(C.buildTrip(model).length>118||model.stops.length>=100)throw Error('Limit reached: 120 days or 100 stops.');model.stops.push(await createStop(p));changed();await render();})));if(!results.children.length)results.textContent='No new matching parks with map coordinates.';})),results);const location=locationField('Or add a city / overnight stop');box.append(location.box,btn('Add this location',()=>run(async()=>{const loc=location.get();if(!loc)throw Error('Find and select a location first.');if(C.buildTrip(model).length>118)throw Error('Limit reached: 120 days.');model.stops.push(await createStop({id:null,name:loc.name,latitude:loc.point[0],longitude:loc.point[1]}));changed();await render();})));host.append(box);q.focus();}
 async function save(){if(model.stops.some(s=>s.draft))throw Error('Choose a place for each empty row, or remove it, before saving.');if(!model.stops.length)throw Error('Add at least one stop.');const trip=C.buildTrip(model);if(trip.length>120)throw Error('Limit this itinerary to 120 days.');say('Saving to your account…');const id=await window.nptCloud.saveProposal(trip,editing);dirty=false;close(true);window.openTrip(id);}
 // The existing campground tab uses the same nearby catalog search for generated trips.
-window.editNptProposal=trip=>window.openNptPlanner(trip);
+window.editNptProposal=(trip,replacement)=>window.openNptPlanner(trip,replacement);
 })();
 
 
