@@ -42,7 +42,7 @@
 .homeactions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .topactions #nptAccountBtn{display:block}
 </style>
-<link rel="stylesheet" href="./trip-views.css?v=trip-address-3">
+<link rel="stylesheet" href="./trip-views.css?v=home-plan-vehicle-1">
 <link rel="stylesheet" href="./planner.css?v=trip-address-3">
 <link rel="stylesheet" href="./catalog-admin.css?v=catalog-manager-11">
 </head>
@@ -259,7 +259,7 @@ function renderItinerary(t){
 }
 function renderDetails(){
  const t=viewedItineraryTrip;if(!t)return;
- const tabs=[["stops","Route stops"],["days","Plan"],["campgrounds","Campgrounds"],["reservations","Reservations"]];
+ const tabs=[["days","Plan"],["stops","Route stops"],["campgrounds","Campgrounds"],["reservations","Reservations"]];
  $("#detailsButtons").innerHTML=tabs.map(([key,label])=>'<button class="btn'+(detailMode===key?" active":"")+'" data-detailmode="'+key+'">'+label+'</button>').join("");
  $$("[data-detailmode]").forEach(btn=>{btn.setAttribute("aria-pressed",String(btn.dataset.detailmode===detailMode));btn.onclick=()=>{detailMode=btn.dataset.detailmode;detailCount=20;renderDetails();$(`[data-detailmode="${detailMode}"]`).focus();};});
  const box=$("#detailsList");const more=$("#loadMoreDetails");box.innerHTML="";more.style.display="none";
@@ -337,8 +337,8 @@ const isAuthCallback = /[?&](code|error|error_code)=/.test(location.search)
 if (!isAuthCallback && !checkShared() && !location.hash.startsWith("#public=") && !location.hash.startsWith("#unlisted=")) showHome();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.76.1" defer></script>
-<script src="./trip-views.js?v=trip-address-3" defer></script>
-<script src="./cloud.js?v=catalog-manager-1" defer></script>
+<script src="./trip-views.js?v=home-plan-vehicle-1" defer></script>
+<script src="./cloud.js?v=home-plan-vehicle-1" defer></script>
 <script src="./catalog-admin.js?v=catalog-manager-12" defer></script>
 <script src="./planner-core.js?v=trip-address-3" defer></script>
 <script src="./planner.js?v=park-destinations-2" defer></script>
