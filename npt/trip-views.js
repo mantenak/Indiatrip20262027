@@ -57,7 +57,7 @@
     return null;
   }
   function replaceEditor(trip,stay,card){
-    if(trip.preferences?.planner&&window.editNptProposal){window.editNptProposal(trip);return;}
+    if(trip.preferences?.planner&&window.editNptProposal){window.editNptProposal(trip,stay);return;}
 
     const form=el("form",undefined,{class:"npt-replace"});
     const search=el("input",undefined,{type:"search","aria-label":"Search campgrounds",placeholder:"Search by name, park, or location"});
