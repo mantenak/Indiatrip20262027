@@ -743,6 +743,25 @@
     if(reduced) map.fitBounds(bounds,{...options,animate:false});
     else map.flyToBounds(bounds,{...options,duration:0.5/speed});
   }
+  function previewVehicleIcon(L, vehicle) {
+    const car = '<path d="M3 15h12v-3l-3-1-2-3H6l-2 3H3z"/><circle cx="6" cy="16" r="1.4"/><circle cx="12" cy="16" r="1.4"/>';
+    const pickup = '<path d="M2 15h15v-4h-6V7H6l-3 4H2z"/><circle cx="5" cy="16" r="1.4"/><circle cx="14" cy="16" r="1.4"/>';
+    const carTent = car + '<path d="M18 16l5-9 5 9zM21 16l2-4 2 4"/>';
+    const campervan = '<path d="M4 15V7h15l5 5v3zM18 8v4h6M8 10h6"/><circle cx="8" cy="16" r="1.5"/><circle cx="20" cy="16" r="1.5"/>';
+    const motorhome = '<path d="M2 15V5h23v10H2zM20 8h5M6 8h5v3H6zM14 8h3v5h-3z"/><circle cx="6" cy="16" r="1.5"/><circle cx="21" cy="16" r="1.5"/>';
+    const fifthWheel = pickup + '<path d="M13 9V4h12l3 2v9H19V9zM16 9v2"/><circle cx="23" cy="16" r="1.4"/><circle cx="26" cy="16" r="1.4"/>';
+    const travelTrailer = pickup + '<path d="M17 14h3m0 1V8l2-2h5l1 2v7z"/><circle cx="24" cy="16" r="1.4"/>';
+    const types = new Map([
+      ["car", carTent], ["campervan", campervan], ["van", campervan],
+      ["motorhome", motorhome], ["classA", motorhome], ["classC", motorhome],
+      ["fifthWheel", fifthWheel], ["trailer", travelTrailer], ["travelTrailer", travelTrailer]
+    ]);
+    const shape = types.get(vehicle?.type) || '<path d="M7 6l14 5-14 5 4-5z"/>';
+    const html = '<span class="npt-map-pin current npt-vehicle-pin" aria-hidden="true">'+
+      '<svg viewBox="0 0 30 22" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round">'+shape+'</svg></span>';
+    return L.divIcon({className:"leaflet-div-icon",html,iconSize:[36,36],iconAnchor:[18,18]});
+  }
+
   function playPreview(state,selectedStop=null) {
     if(!state.map) return;
     if(!state.roads?.every(leg=>leg?.length>1)){state.key.textContent="Load the road route before playing. Use Retry road route if loading failed.";return;}
@@ -757,7 +776,7 @@
     const reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
     const preview={stops,index:startIndex,elapsed:0,last:null,frame:0,paused:atStop,atStop,
       done:startIndex===stops.length-1,newLeg:true,marker:L.marker(start.point,{
-        icon:L.divIcon({className:"leaflet-div-icon",html:'<span class="npt-map-pin current" aria-hidden="true">➤</span>',iconSize:[25,25],iconAnchor:[12,12]}),
+        icon:previewVehicleIcon(L,state.trip.vehicle),
         zIndexOffset:1500,interactive:false
       }).addTo(map)};
     state.preview=preview;

@@ -114,7 +114,7 @@
     $(".npt-brand").onclick=()=>{window.closeNptWalk?.();homeMode("public");};
     const home = $("#home");
     home.insertAdjacentHTML("beforeend", `<div class="accountbar"><span id="cloudStatus">Loading NPT...</span></div>
-    <div class="section" id="publicSection"><div class="sectionhead"><div><h3>Explore Public Trips</h3><p>Anyone can view these trips without signing in</p></div><button class="btn" id="refreshPublicTrips">Refresh</button></div><div id="nptPublicList" class="publiclist"><div class="empty">Checking for public trips...</div></div></div>`);
+    <div class="section" id="publicSection"><div class="npt-home-brand"><img src="./npt-logo.webp" width="252" height="252" alt="National Park Trip"></div><div class="sectionhead"><div><h3>Explore Public Trips</h3><p>Anyone can view these trips without signing in</p></div><button class="btn" id="refreshPublicTrips">Refresh</button></div><div id="nptPublicList" class="publiclist"><div class="empty">Checking for public trips...</div></div></div>`);
     $("#myTrips").hidden=true;
     $("#nptCancelAuth").onclick = ()=>{remember(null);hideAuth();};
     $("#nptAuth").addEventListener("click", e => { if(e.target.id === "nptAuth") hideAuth(); });
